@@ -4,7 +4,7 @@ from scipy.stats import norm
 class Likelihood:
     """Compute likelihood and posterior probabilities."""
     
-    def __init__(self, obs_flux, obs_err, priors=None):
+    def __init__(self, obs_flux, obs_err, priors=None, error_floor=0.1):
         """
         Initialize likelihood.
         
@@ -12,14 +12,27 @@ class Likelihood:
             obs_flux: Observed flux values
             obs_err: Observed flux errors
             priors: Dict of prior bounds {param: [min, max]}
+            error_floor: Fractional error floor to add (accounts for model inadequacy)
         """
         self.obs_flux = obs_flux
         self.obs_err = obs_err
         self.priors = priors or {}
+        self.error_floor = error_floor
+        
+        # Compute effective errors including floor
+        # Use maximum of absolute and fractional error
+        abs_floor = error_floor * np.median(obs_flux)  # Absolute floor based on median flux
+        frac_floor = error_floor * obs_flux            # Fractional floor
+        
+        self.eff_err = np.sqrt(obs_err**2 + np.maximum(abs_floor, frac_floor)**2)
+        
+        print(f"[LIKELIHOOD] Using error floor of {error_floor*100:.0f}%")
+        print(f"[LIKELIHOOD] Original errors: {obs_err.min():.2e} to {obs_err.max():.2e}")
+        print(f"[LIKELIHOOD] Effective errors: {self.eff_err.min():.2e} to {self.eff_err.max():.2e}")
     
     def log_likelihood(self, mod_flux):
         """
-        Compute log-likelihood (χ²).
+        Compute log-likelihood (χ²) with error floor.
         
         Args:
             mod_flux: Model flux values (same shape as obs_flux)
@@ -27,7 +40,7 @@ class Likelihood:
         Returns:
             float: -0.5 * χ²
         """
-        chi2 = np.sum(((self.obs_flux - mod_flux) / self.obs_err) ** 2)
+        chi2 = np.sum(((self.obs_flux - mod_flux) / self.eff_err) ** 2)
         return -0.5 * chi2
     
     def log_prior(self, params):

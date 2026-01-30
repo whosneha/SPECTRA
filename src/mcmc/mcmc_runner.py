@@ -22,6 +22,7 @@ class MCMCRunner:
         self.n_steps = self.config.get('n_steps', 1000)
         self.n_burnin = self.config.get('n_burnin', 300)
         self.n_threads = self.config.get('n_threads', 1)
+        self.thin = self.config.get('thin', 1)  # Thinning factor
         
         self.sampler = None
         self.samples = None
@@ -74,43 +75,54 @@ class MCMCRunner:
         Returns:
             dict: MCMC results with samples, acceptance fraction, etc.
         """
-        # Initialize walker positions with small random perturbations
-        p0 = np.array([initial_params[p] for p in param_names])
-        pos = p0 + 1e-4 * np.random.randn(self.n_walkers, len(param_names))
+        # Initialize walker positions spread across the prior volume
+        # Use Latin hypercube-like initialization for better coverage
+        p0_base = np.array([initial_params[p] for p in param_names])
+        n_dim = len(param_names)
         
-        # Ensure all walkers start within bounds
+        # Spread walkers more broadly across prior space
+        pos = np.zeros((self.n_walkers, n_dim))
         for i, (pmin, pmax) in enumerate(bounds):
-            pos[:, i] = np.clip(pos[:, i], pmin, pmax)
+            # Use uniform distribution across 20%-80% of prior range
+            prior_range = pmax - pmin
+            pos[:, i] = pmin + 0.2 * prior_range + 0.6 * prior_range * np.random.rand(self.n_walkers)
         
         print(f"Running MCMC with {self.n_walkers} walkers for {self.n_steps} steps...")
-        print(f"Burn-in: {self.n_burnin} steps")
+        print(f"Burn-in: {self.n_burnin} steps, Thinning: {self.thin}")
+        print(f"Initial positions span:")
+        for i, p in enumerate(param_names):
+            print(f"  {p}: {pos[:, i].min():.3f} to {pos[:, i].max():.3f}")
         
         # Create sampler
         if use_pool and self.n_threads > 1:
             with Pool(self.n_threads) as pool:
                 self.sampler = emcee.EnsembleSampler(
-                    self.n_walkers, len(param_names), 
+                    self.n_walkers, n_dim, 
                     self.log_probability, 
                     args=(param_names,),
                     pool=pool
                 )
-                # Run MCMC
                 self.sampler.run_mcmc(pos, self.n_steps, progress=True)
         else:
             self.sampler = emcee.EnsembleSampler(
-                self.n_walkers, len(param_names), 
+                self.n_walkers, n_dim, 
                 self.log_probability, 
                 args=(param_names,)
             )
-            # Run MCMC
             self.sampler.run_mcmc(pos, self.n_steps, progress=True)
         
-        # Extract samples after burn-in
-        self.samples = self.sampler.get_chain(discard=self.n_burnin, flat=True)
+        # Extract samples after burn-in with thinning
+        self.samples = self.sampler.get_chain(discard=self.n_burnin, thin=self.thin, flat=True)
         
         # Compute statistics
         acceptance_fraction = np.mean(self.sampler.acceptance_fraction)
         print(f"Mean acceptance fraction: {acceptance_fraction:.3f}")
+        
+        # Check for convergence issues
+        if acceptance_fraction < 0.1:
+            print("WARNING: Low acceptance fraction. Chain may not have converged.")
+        elif acceptance_fraction > 0.5:
+            print("WARNING: High acceptance fraction. Consider using larger step sizes.")
         
         # Get best-fit parameters (median of posterior)
         medians = np.median(self.samples, axis=0)
@@ -126,6 +138,12 @@ class MCMCRunner:
                 'upper': p84 - p50,
                 'samples': self.samples[:, i]
             }
+            # Check if hitting boundaries
+            pmin, pmax = bounds[i]
+            if p50 - p16 < 0.1 * (pmax - pmin) and p50 < pmin + 0.15 * (pmax - pmin):
+                print(f"WARNING: {param} is hitting lower prior bound")
+            if p84 - p50 < 0.1 * (pmax - pmin) and p50 > pmax - 0.15 * (pmax - pmin):
+                print(f"WARNING: {param} is hitting upper prior bound")
         
         # Compute log likelihood at best-fit
         mod_flux_best = self.ssp_model.get_magnitudes(

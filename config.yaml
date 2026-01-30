@@ -1,29 +1,44 @@
 rubin:
-  object_id: "id_z4p59"
+  object_id: "batch_run"
   bands: [u, g, r, i, z, y]
 
 input:
-  photometry_file: "/Users/snehanair/Downloads/out/id_z4p59_ObsSpec_model.dat"
-  format: "dat"  # dat, csv, hdf5, parquet
+  # Can be a single file, a list of files, or a directory pattern
+  photometry_files:
+    - "/Users/snehanair/Downloads/out/id_z4p59_ObsSpec_model.dat"
+    - "/Users/snehanair/Downloads/out/id_z6p01_ObsSpec_model.dat"
+    # Add more files here:
+   
+    # - "/Users/snehanair/Downloads/out/third_object.dat"
+  # OR use a directory pattern (uncomment to use):
+  # photometry_dir: "/Users/snehanair/Downloads/out"
+  # file_pattern: "*_ObsSpec_model.dat"
+  format: "dat"
 
 ssp_model:
-  type: "fsps"  # fsps or bc03
+  type: "fsps"
   imf: "kroupa"
   dust_model: "calzetti"
-  distance_mpc: 1000.0  # Distance to object in Mpc (adjust based on redshift)
+  distance_mpc: 40000.0
+  # NOTE: redshift is auto-extracted from filename (e.g., z4p59 -> 4.59)
+  # This value is only used as fallback if extraction fails
+  redshift: 4.59
   
 fitting:
-  method: "ml"  # ml or mcmc
-  parameters: [mass, age, metallicity]
+  method: "mcmc"
+  parameters: [mass, age, metallicity, dust]
   priors:
-    mass: [8, 13]  # log10 solar masses
-    age: [0.1, 13.8]   # Gyr
-    metallicity: [-2.0, 0.3]  # log10 Z/Zsun
+    mass: [10, 14]        # Wider mass range to allow fitting
+    age: [0.01, 0.5]      # Young ages for high-z
+    metallicity: [-1.5, 0.0]  # Sub-solar metallicity
+    dust: [0.0, 1.0]      # Lower dust range
+  error_floor: 0.25       # Increase error floor to allow more flexibility
 
 mcmc:
-  n_walkers: 32
-  n_steps: 2000
+  n_walkers: 32           # Fewer walkers for faster runs
+  n_steps: 2000           # Fewer steps for testing
   n_burnin: 500
+  thin: 5
   n_threads: 4
 
 plotting:

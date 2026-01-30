@@ -8,18 +8,15 @@ class SSPModel:
     def __init__(self, config):
         """
         Initialize SSP model.
-        
-        Args:
-            config: Dict with type, imf, dust_model keys
         """
         self.model_type = config.get('type', 'fsps')
         self.imf = config.get('imf', 'kroupa')
         self.dust_model = config.get('dust_model', 'calzetti')
-        self.distance_mpc = config.get('distance_mpc', 100.0)  # Default 100 Mpc
+        self.distance_mpc = config.get('distance_mpc', 100.0)
+        self.redshift = config.get('redshift', 0.0)
         self.mock_mode = True
         self.ssp = None
         
-        # Try to initialize FSPS
         if self.model_type == 'fsps':
             self._init_fsps()
         elif self.model_type == 'bc03':
@@ -83,7 +80,7 @@ class SSPModel:
         }
         return dust_map.get(dust_name.lower(), 1)
     
-    def get_magnitudes(self, mass=1e10, age=1.0, metallicity=-0.5, wavelengths=None):
+    def get_magnitudes(self, mass=1e10, age=1.0, metallicity=-0.5, dust=0.0, wavelengths=None):
         """
         Get model magnitudes/fluxes for given parameters.
         
@@ -91,119 +88,126 @@ class SSPModel:
             mass: Stellar mass in log10 solar masses
             age: Age in Gyr
             metallicity: Metallicity in log10 Z/Zsun
+            dust: E(B-V) dust attenuation
             wavelengths: Optional wavelength array (μm)
             
         Returns:
             array: Model fluxes in Jy
         """
         if self.mock_mode:
-            return self._get_mock_fluxes(mass, age, metallicity, wavelengths)
+            return self._get_mock_fluxes(mass, age, metallicity, dust, wavelengths)
         else:
-            return self._get_fsps_fluxes(mass, age, metallicity, wavelengths)
+            return self._get_fsps_fluxes(mass, age, metallicity, dust, wavelengths)
     
-    def _get_fsps_fluxes(self, mass, age, metallicity, wavelengths=None):
+    def _get_fsps_fluxes(self, mass, age, metallicity, dust=0.0, wavelengths=None):
         """
-        Get fluxes from FSPS.
-        
-        Args:
-            mass: log10 stellar mass (solar masses)
-            age: Age in Gyr
-            metallicity: log10 Z/Zsun
-            wavelengths: Wavelength array in μm (optional)
-            
-        Returns:
-            array: Fluxes in Jy
+        Get fluxes from FSPS with proper redshift handling and dust.
         """
         try:
-            # Convert mass from log10 to linear (solar masses)
             mass_msun = 10 ** mass
-            
-            # Set FSPS parameters
             self.ssp.params['logzsol'] = metallicity
+            self.ssp.params['dust2'] = dust  # Set dust attenuation
             
-            # Get SED at specified age (age in Gyr)
-            wav_aa, spec_lsun_hz = self.ssp.get_spectrum(tage=age, peraa=False)
+            wav_aa_rest, lum_lsun_hz = self.ssp.get_spectrum(tage=age, peraa=False)
+            wav_um_rest = wav_aa_rest / 1e4
             
-            # Convert wavelength from Angstrom to micron
-            wav_um = wav_aa / 1e4
+            z = self.redshift
+            wav_um_obs = wav_um_rest * (1 + z)
             
-            # Constants
-            Lsun_erg = 3.828e33  # erg/s
-            pc_cm = 3.086e18     # cm
-            Mpc_cm = 3.086e24    # cm
+            Lsun_erg_s = 3.828e33
+            pc_cm = 3.0857e18
             
-            # Use actual distance to galaxy (in Mpc)
-            distance_cm = self.distance_mpc * Mpc_cm
+            lum_erg_s_hz = lum_lsun_hz * mass_msun * Lsun_erg_s
+            distance_cm = self.distance_mpc * 1e6 * pc_cm
+            flux_erg_s_cm2_hz = lum_erg_s_hz / (4.0 * np.pi * distance_cm**2 * (1 + z))
+            flux_jy = flux_erg_s_cm2_hz * 1e23
             
-            # Convert from Lsun/Hz to erg/s/Hz
-            spec_erg_hz = spec_lsun_hz * Lsun_erg
-            
-            # Then divide by 4π*d^2 to get flux at distance
-            flux_cgs_hz = spec_erg_hz / (4 * np.pi * distance_cm**2)
-            flux_jy = flux_cgs_hz * 1e23  # Convert to Jy
-            
-            # Scale by mass
-            flux_jy *= mass_msun
-            
-            # Interpolate to requested wavelengths if provided
             if wavelengths is not None:
-                valid_idx = (wav_um > 0) & (flux_jy > 0)
+                valid_idx = (wav_um_obs > 0) & (flux_jy > 0) & np.isfinite(flux_jy)
                 if np.any(valid_idx):
-                    flux_jy = np.interp(wavelengths, wav_um[valid_idx], flux_jy[valid_idx])
+                    sort_idx = np.argsort(wav_um_obs[valid_idx])
+                    wav_sorted = wav_um_obs[valid_idx][sort_idx]
+                    flux_sorted = flux_jy[valid_idx][sort_idx]
+                    flux_jy = np.interp(wavelengths, wav_sorted, flux_sorted)
+                else:
+                    flux_jy = np.zeros_like(wavelengths)
             
-            print(f"[FSPS DEBUG] mass={mass} (log10), mass_msun={mass_msun:.2e}")
-            print(f"[FSPS DEBUG] age={age} Gyr, metallicity={metallicity}")
-            print(f"[FSPS DEBUG] distance={self.distance_mpc} Mpc")
-            print(f"[FSPS DEBUG] Converted flux range: {flux_jy.min():.2e} to {flux_jy.max():.2e} Jy")
-            
-            return np.maximum(flux_jy, 1e-10)
+            return np.maximum(flux_jy, 1e-30)
             
         except Exception as e:
             print(f"Error in FSPS calculation: {e}")
             import traceback
             traceback.print_exc()
-            print("Falling back to mock mode")
             self.mock_mode = True
-            return self._get_mock_fluxes(mass, age, metallicity, wavelengths)
+            return self._get_mock_fluxes(mass, age, metallicity, dust, wavelengths)
     
-    def _get_mock_fluxes(self, mass, age, metallicity, wavelengths=None):
+    def _get_mock_fluxes(self, mass, age, metallicity, dust=0.0, wavelengths=None):
         """
         Get synthetic mock fluxes for testing.
-        Produces fluxes in Jy with realistic scaling.
-        
-        Args:
-            mass: log10 stellar mass
-            age: Age in Gyr
-            metallicity: log10 Z/Zsun
-            wavelengths: Optional wavelength array to match
-            
-        Returns:
-            array: Mock fluxes in Jy
+        Calibrated to produce realistic fluxes for high-z galaxies.
         """
         n_wavelengths = len(wavelengths) if wavelengths is not None else 12
         
-        # Base flux scales with mass (in Jy)
-        # For a 1e10 solar mass star at optical wavelengths: ~3e-5 Jy
+        # Convert mass from log to linear
         mass_msun = 10 ** mass
-        base_flux = 3e-5 * (mass_msun / 1e10)
         
-        # Age factor: older stars are fainter
-        age_factor = np.exp(-age / 10.0)
+        # Base flux calibration:
+        # For a 10^12 Msun galaxy at z~5, typical flux is ~10^-5 Jy
+        # Scale: flux ~ mass / (distance^2)
+        # At z=5, luminosity distance ~ 47 Gpc = 4.7e10 pc
+        # 
+        # More direct approach: calibrate to match observed data range
+        # Observed: ~10^-5 to 10^-4 Jy for mass ~ 10^11-12 Msun
         
-        # Metallicity factor: affects colors and luminosity
-        z_factor = 1.0 + metallicity * 0.2
+        # Flux scaling: 10^-5 Jy at mass = 10^12 Msun
+        base_flux = 3e-5 * (mass_msun / 1e12)
         
-        # Add wavelength dependence (redder at longer wavelengths)
+        # Age effect: younger populations are brighter in rest-UV
+        # But at fixed mass, younger = more stars recently formed = brighter
+        # Use mild age dependence
+        age_factor = (0.1 / max(age, 0.01)) ** 0.2  # Mild dependence
+        
+        # Metallicity effect (minor)
+        z_factor = 1.0 + 0.05 * metallicity
+        
         if wavelengths is not None:
-            wav_factor = (0.6 / wavelengths) ** 0.3
+            # Simple SED shape - relatively flat in Fnu for young galaxies
+            # with slight blue slope
+            wav_ref = 0.65  # Reference wavelength in microns
+            
+            # Young galaxies have blue UV slopes (beta ~ -2)
+            # beta gets redder (less negative) with age
+            beta = -1.5 + age * 0.5  # Mild wavelength dependence
+            wav_factor = (wavelengths / wav_ref) ** beta
+            
+            # Normalize so mean is ~1
+            wav_factor = wav_factor / np.mean(wav_factor)
+            
+            # Apply dust attenuation (Calzetti-like)
+            if dust > 0:
+                Rv = 4.05
+                # Simplified Calzetti law for optical wavelengths
+                k_lambda = np.where(
+                    wavelengths < 0.63,
+                    2.659 * (-2.156 + 1.509/wavelengths - 0.198/wavelengths**2 + 0.011/wavelengths**3) + Rv,
+                    2.659 * (-1.857 + 1.040/wavelengths) + Rv
+                )
+                k_lambda = np.maximum(k_lambda, 0)
+                A_lambda = dust * k_lambda
+                dust_factor = 10 ** (-0.4 * A_lambda)
+            else:
+                dust_factor = np.ones_like(wavelengths)
         else:
             wav_factor = np.ones(n_wavelengths)
-        
-        # Realistic noise
-        np.random.seed(42)
-        noise = np.random.normal(1.0, 0.08, n_wavelengths)
+            dust_factor = np.ones(n_wavelengths)
         
         # Combine all factors
-        fluxes = base_flux * age_factor * z_factor * wav_factor * noise
+        fluxes = base_flux * age_factor * z_factor * wav_factor * dust_factor
         
-        return np.maximum(fluxes, 1e-6)
+        # Add small deterministic scatter (based on wavelength index, not random)
+        # This ensures reproducibility
+        n = len(fluxes)
+        scatter = 1.0 + 0.05 * np.sin(np.arange(n) * 2.3)
+        fluxes = fluxes * scatter
+        
+        return np.maximum(fluxes, 1e-10)
