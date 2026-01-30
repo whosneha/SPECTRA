@@ -130,6 +130,18 @@ def process_single_file(filepath, config, ssp_model_base_config):
     phot_data['object_id'] = object_id
     phot_data['redshift'] = redshift
     
+    # IMPORTANT: Calibrate mock model to observed flux levels
+    ssp_model.set_flux_calibration(phot_data['obs_flux'])
+    
+    # DEBUG: Verify calibration works
+    test_flux = ssp_model.get_magnitudes(
+        mass=12.0, age=0.1, metallicity=-0.5, dust=0.0,
+        wavelengths=phot_data['wavelength']
+    )
+    print(f"[CALIBRATION DEBUG] At mass=12, age=0.1:")
+    print(f"  Model flux range: {test_flux.min():.2e} to {test_flux.max():.2e} Jy")
+    print(f"  Observed flux range: {phot_data['obs_flux'].min():.2e} to {phot_data['obs_flux'].max():.2e} Jy")
+    
     # Convert priors to numeric
     priors_numeric = {}
     for param, bounds in config['fitting']['priors'].items():

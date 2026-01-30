@@ -17,10 +17,25 @@ class SSPModel:
         self.mock_mode = True
         self.ssp = None
         
+        # Calibration flux level (will be set from observed data)
+        self.flux_calibration = None
+        
         if self.model_type == 'fsps':
             self._init_fsps()
         elif self.model_type == 'bc03':
             self._init_bc03()
+    
+    def set_flux_calibration(self, obs_flux):
+        """
+        Set flux calibration based on observed data.
+        This ensures the mock model produces fluxes in the correct range.
+        
+        Args:
+            obs_flux: Array of observed flux values
+        """
+        # Use median of observed flux as reference
+        self.flux_calibration = np.median(obs_flux)
+        print(f"[SSP MODEL] Flux calibration set to {self.flux_calibration:.2e} Jy")
     
     def _init_fsps(self):
         """Initialize FSPS model."""
@@ -144,40 +159,38 @@ class SSPModel:
     def _get_mock_fluxes(self, mass, age, metallicity, dust=0.0, wavelengths=None):
         """
         Get synthetic mock fluxes for testing.
-        Calibrated to produce realistic fluxes for high-z galaxies.
+        Calibrated to produce realistic fluxes matching observed data.
         """
         n_wavelengths = len(wavelengths) if wavelengths is not None else 12
         
         # Convert mass from log to linear
         mass_msun = 10 ** mass
         
-        # Base flux calibration:
-        # For a 10^12 Msun galaxy at z~5, typical flux is ~10^-5 Jy
-        # Scale: flux ~ mass / (distance^2)
-        # At z=5, luminosity distance ~ 47 Gpc = 4.7e10 pc
-        # 
-        # More direct approach: calibrate to match observed data range
-        # Observed: ~10^-5 to 10^-4 Jy for mass ~ 10^11-12 Msun
+        # Reference mass for scaling (10^12 solar masses)
+        mass_ref = 1e12
         
-        # Flux scaling: 10^-5 Jy at mass = 10^12 Msun
-        base_flux = 3e-5 * (mass_msun / 1e12)
+        # Base flux calibration
+        # If we have a calibration from observed data, use it
+        # Scale so that mass=12 (10^12 Msun) gives approximately the observed flux level
+        if self.flux_calibration is not None:
+            base_flux = self.flux_calibration * (mass_msun / mass_ref)
+        else:
+            # Default: 3e-5 Jy at mass = 10^12 Msun
+            base_flux = 3e-5 * (mass_msun / mass_ref)
         
-        # Age effect: younger populations are brighter in rest-UV
-        # But at fixed mass, younger = more stars recently formed = brighter
-        # Use mild age dependence
-        age_factor = (0.1 / max(age, 0.01)) ** 0.2  # Mild dependence
+        # Age effect: younger populations are brighter
+        # Very mild dependence - factor of ~2 across age range
+        age_factor = (0.1 / max(age, 0.01)) ** 0.1
         
-        # Metallicity effect (minor)
-        z_factor = 1.0 + 0.05 * metallicity
+        # Metallicity effect (very minor)
+        z_factor = 1.0 + 0.02 * metallicity
         
         if wavelengths is not None:
             # Simple SED shape - relatively flat in Fnu for young galaxies
-            # with slight blue slope
             wav_ref = 0.65  # Reference wavelength in microns
             
-            # Young galaxies have blue UV slopes (beta ~ -2)
-            # beta gets redder (less negative) with age
-            beta = -1.5 + age * 0.5  # Mild wavelength dependence
+            # Very mild wavelength dependence
+            beta = -0.5 + age * 0.2
             wav_factor = (wavelengths / wav_ref) ** beta
             
             # Normalize so mean is ~1
@@ -186,7 +199,6 @@ class SSPModel:
             # Apply dust attenuation (Calzetti-like)
             if dust > 0:
                 Rv = 4.05
-                # Simplified Calzetti law for optical wavelengths
                 k_lambda = np.where(
                     wavelengths < 0.63,
                     2.659 * (-2.156 + 1.509/wavelengths - 0.198/wavelengths**2 + 0.011/wavelengths**3) + Rv,
@@ -204,10 +216,9 @@ class SSPModel:
         # Combine all factors
         fluxes = base_flux * age_factor * z_factor * wav_factor * dust_factor
         
-        # Add small deterministic scatter (based on wavelength index, not random)
-        # This ensures reproducibility
+        # Add small deterministic scatter
         n = len(fluxes)
-        scatter = 1.0 + 0.05 * np.sin(np.arange(n) * 2.3)
+        scatter = 1.0 + 0.02 * np.sin(np.arange(n) * 2.3)
         fluxes = fluxes * scatter
         
-        return np.maximum(fluxes, 1e-10)
+        return np.maximum(fluxes, 1e-15)

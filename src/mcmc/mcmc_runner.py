@@ -93,6 +93,15 @@ class MCMCRunner:
         for i, p in enumerate(param_names):
             print(f"  {p}: {pos[:, i].min():.3f} to {pos[:, i].max():.3f}")
         
+        # DEBUG: Check what fluxes we get at the center of the prior
+        test_params = {p: (bounds[i][0] + bounds[i][1]) / 2 for i, p in enumerate(param_names)}
+        test_flux = self.ssp_model.get_magnitudes(wavelengths=self.wavelengths, **test_params)
+        print(f"\n[MCMC DEBUG] Test flux at prior center:")
+        print(f"  Parameters: {test_params}")
+        print(f"  Flux range: {test_flux.min():.2e} to {test_flux.max():.2e} Jy")
+        print(f"  Observed flux range: {self.likelihood.obs_flux.min():.2e} to {self.likelihood.obs_flux.max():.2e} Jy")
+        print(f"  Ratio (model/obs): {np.median(test_flux)/np.median(self.likelihood.obs_flux):.2f}")
+        
         # Create sampler
         if use_pool and self.n_threads > 1:
             with Pool(self.n_threads) as pool:
