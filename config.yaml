@@ -1,0 +1,31 @@
+rubin:
+  object_id: "id_z4p59"
+  bands: [u, g, r, i, z, y]
+
+input:
+  photometry_file: "/Users/snehanair/Downloads/out/id_z4p59_ObsSpec_model.dat"
+  format: "dat"  # dat, csv, hdf5, parquet
+
+ssp_model:
+  type: "fsps"  # fsps or bc03
+  imf: "kroupa"
+  dust_model: "calzetti"
+  distance_mpc: 1000.0  # Distance to object in Mpc (adjust based on redshift)
+  
+fitting:
+  method: "ml"  # ml or mcmc
+  parameters: [mass, age, metallicity]
+  priors:
+    mass: [8, 13]  # log10 solar masses
+    age: [0.1, 13.8]   # Gyr
+    metallicity: [-2.0, 0.3]  # log10 Z/Zsun
+
+mcmc:
+  n_walkers: 32
+  n_steps: 2000
+  n_burnin: 500
+  n_threads: 4
+
+plotting:
+  output_dir: "/Users/snehanair/Downloads/out/results"
+  formats: [png, pdf]
