@@ -7,7 +7,6 @@ input:
   photometry_files:
     - "/Users/snehanair/Downloads/out/id_z4p59_ObsSpec_model.dat"
     - "/Users/snehanair/Downloads/out/id_z6p01_ObsSpec_model.dat"
-    - "/Users/snehanair/Downloads/out/id_z8p62_ObsSpec_model.dat"
     # Add more files here:
    
     # - "/Users/snehanair/Downloads/out/third_object.dat"
