@@ -1,0 +1,8 @@
+title: SPECTRA
+author: Sneha Nair
+logo: ""
+execute:
+  execute_notebooks: "off"
+repository:
+  url: https://github.com/yourusername/SPECTRA
+  branch: main

@@ -1,46 +1,135 @@
+# =============================================================================
+# SPECTRA Configuration File - PHANGS FITS Batch Processing
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Data Input Configuration
+# -----------------------------------------------------------------------------
+input:
+  # Use batch FITS processing
+  type: "fornax_csv"
+  filepath: data/fornax_gc_photometry.csv
+  
+  # Directory containing FITS catalogs
+  fits_dir: "/Users/snehanair/Downloads/catalogs 2"
+  
+  # Pattern to match FITS files (glob pattern)
+  file_pattern: "hlsp_phangs-cat_hst_uvis_ic5332_*.fits"
+  
+  # Process multiple rows per file (null = all rows, or specify a number)
+  max_rows_per_file: 10  # Process first 10 clusters from each catalog
+  
+  # Or process specific row indices
+  # row_indices: [0, 1, 2, 3, 4]
+  
+  # Column mapping for PHANGS data
+  column_mapping:
+    flux_columns:
+      F275W: "PHANGS_F275W_mJy"
+      F336W: "PHANGS_F336W_mJy"
+      F438W: "PHANGS_F438W_mJy"
+      F555W: "PHANGS_F555W_mJy"
+      F814W: "PHANGS_F814W_mJy"
+    error_columns:
+      F275W: "PHANGS_F275W_mJy_ERR"
+      F336W: "PHANGS_F336W_mJy_ERR"
+      F438W: "PHANGS_F438W_mJy_ERR"
+      F555W: "PHANGS_F555W_mJy_TOT_ERR"
+      F814W: "PHANGS_F814W_mJy_TOT_ERR"
+    ra: "PHANGS_RA"
+    dec: "PHANGS_DEC"
+    id: "ID_PHANGS_CLUSTER"
+  
+  flux_unit: "mJy"
+
+# -----------------------------------------------------------------------------
+# HST Filter Wavelengths (microns)
+# -----------------------------------------------------------------------------
+filters:
+  F275W: 0.275
+  F336W: 0.336
+  F438W: 0.438
+  F555W: 0.531
+  F814W: 0.802
+
+# -----------------------------------------------------------------------------
+# Rubin/LSST Authentication (not used for FITS input)
+# -----------------------------------------------------------------------------
 rubin:
-  object_id: "batch_run"
+  rsp_token: "gt-4nikqhC-Z-s3tIUeH_4Gmw.1UteXiH_ZnQBknLS8GSH6Q"
+  tap_url: "https://data.lsst.cloud/api/tap"
+  catalog: "dp02_dc2_catalogs.Object"
+  flux_type: "cModelFlux"
   bands: [u, g, r, i, z, y]
 
-input:
-  # Can be a single file, a list of files, or a directory pattern
-  photometry_files:
-    - "/Users/snehanair/Downloads/out/id_z4p59_ObsSpec_model.dat"
-    - "/Users/snehanair/Downloads/out/id_z6p01_ObsSpec_model.dat"
-    # Add more files here:
-   
-    # - "/Users/snehanair/Downloads/out/third_object.dat"
-  # OR use a directory pattern (uncomment to use):
-  # photometry_dir: "/Users/snehanair/Downloads/out"
-  # file_pattern: "*_ObsSpec_model.dat"
-  format: "dat"
+# -----------------------------------------------------------------------------
+# Additional Data Sources (for combining with Rubin)
+# -----------------------------------------------------------------------------
+additional_data:
+  enabled: false
+  files: []
 
+# -----------------------------------------------------------------------------
+# External photometry sources
+# -----------------------------------------------------------------------------
+external_sources:
+  enabled: true  # Enable querying external catalogs
+  sources:
+    - 'galex'      # GALEX UV photometry
+    - 'allwise'    # AllWISE infrared photometry
+    - 'vista'      # VISTA Hemisphere Survey
+    # - 'euclid'   # Euclid (when data available)
+    # - 'roman'    # Roman Space Telescope (future)
+  radius_arcsec: 10.0  # Search radius for cross-matching
+  min_wavelength_separation_um: 0.05  # Minimum separation to keep both bands
+  prefer_primary: true  # Prefer primary data (Rubin/FITS) over external when overlapping
+  
+  # Quality cuts
+  max_magnitude: 25.0  # Reject fainter sources
+  min_snr: 3.0  # Minimum signal-to-noise ratio
+
+# -----------------------------------------------------------------------------
+# SSP Model Configuration
+# -----------------------------------------------------------------------------
 ssp_model:
   type: "fsps"
   imf: "kroupa"
   dust_model: "calzetti"
-  distance_mpc: 40000.0
-  # NOTE: redshift is auto-extracted from filename (e.g., z4p59 -> 4.59)
-  # This value is only used as fallback if extraction fails
-  redshift: 4.59
-  
+  distance_mpc: 1.48      # Fornax dSph distance (Freedman 1988; McConnachie 2012)
+  redshift: 0.00032       # z = v/c = 40 km/s / 3e5 km/s (NED recession velocity)
+  compute_vega_mags: false
+
+# -----------------------------------------------------------------------------
+# Fitting Configuration
+# -----------------------------------------------------------------------------
 fitting:
-  method: "mcmc"
+  method: "mcmc"           # changed from "ml" — required for corner plots
   parameters: [mass, age, metallicity, dust]
   priors:
-    mass: [10, 14]        # Wider mass range to allow fitting
-    age: [0.01, 0.5]      # Young ages for high-z
-    metallicity: [-1.5, 0.0]  # Sub-solar metallicity
-    dust: [0.0, 1.0]      # Lower dust range
-  error_floor: 0.25       # Increase error floor to allow more flexibility
+    mass: [8.0, 14.0]
+    age: [0.01, 13.5]
+    metallicity: [-2.5, 0.5]
+    dust: [0.0, 2.0]
+  error_floor: 0.05
 
+# -----------------------------------------------------------------------------
+# MCMC Configuration - reduce for faster batch processing
+# -----------------------------------------------------------------------------
 mcmc:
-  n_walkers: 32           # Fewer walkers for faster runs
-  n_steps: 2000           # Fewer steps for testing
-  n_burnin: 500
-  thin: 5
+  n_walkers: 32
+  n_steps: 500      # Reduced for batch processing
+  n_burnin: 200
+  thin: 3
   n_threads: 4
 
+# -----------------------------------------------------------------------------
+# Output Configuration
+# -----------------------------------------------------------------------------
 plotting:
-  output_dir: "/Users/snehanair/Downloads/out/results"
-  formats: [png, pdf]
+  output_dir: outputs/fornax_gc
+  formats: [png]    # Just PNG for faster batch processing
+
+output:
+  save_photometry: true
+  save_samples: false  # Don't save MCMC samples for batch (saves disk space)
+  photometry_format: "csv"

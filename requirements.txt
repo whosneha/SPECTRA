@@ -7,3 +7,12 @@ emcee
 PyYAML>=6.0
 corner
 h5py>=3.0.0
+
+# For Rubin data access
+pyvo>=1.4
+requests>=2.25.0
+
+# For FITS file support
+astropy>=5.0
+
+astroquery>=0.4.6

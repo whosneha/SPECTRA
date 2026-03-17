@@ -1,65 +1,395 @@
-def load_data(file_path):
-    """
-    Load data from the specified file path.
-    
-    Parameters:
-    file_path (str): The path to the data file.
-
-    Returns:
-    data (pd.DataFrame): Loaded data as a pandas DataFrame.
-    """
-    import pandas as pd
-
-    data = pd.read_csv(file_path)
-    return data
-
-
-def preprocess_data(data):
-    """
-    Preprocess the loaded data for SED fitting.
-    
-    Parameters:
-    data (pd.DataFrame): The raw data to preprocess.
-
-    Returns:
-    processed_data (pd.DataFrame): The preprocessed data.
-    """
-    # Example preprocessing steps
-    processed_data = data.dropna()  # Remove missing values
-    # Add more preprocessing steps as needed
-    return processed_data
-
-
-def load_rubin_data(rubin_id):
-    """
-    Load data from the Rubin Science Platform using the provided Rubin ID.
-    
-    Parameters:
-    rubin_id (str): The Rubin ID for data retrieval.
-
-    Returns:
-    data (pd.DataFrame): Loaded data as a pandas DataFrame.
-    """
-    # Placeholder for actual data loading logic from Rubin API
-    # This function should implement the API call to retrieve data
-    pass
-
+import os
+import numpy as np
+import pandas as pd
+from typing import Dict, Optional, List, Union
+from pathlib import Path
+from astropy.io import fits
+from astropy.table import Table
+from src.data.external_sources import ExternalPhotometryQuery, ExternalDataCombiner
 
 class DataLoader:
-    """
-    A class to handle data loading and preprocessing for the SED fitting pipeline.
-    """
-
-    def __init__(self, file_path=None, rubin_id=None):
-        self.file_path = file_path
-        self.rubin_id = rubin_id
-
-    def load(self):
-        if self.file_path:
-            data = load_data(self.file_path)
-        elif self.rubin_id:
-            data = load_rubin_data(self.rubin_id)
-        else:
-            raise ValueError("Either file_path or rubin_id must be provided.")
+    """Unified data loader for various input formats."""
+    
+    # Standard filter wavelengths (microns)
+    FILTER_WAVELENGTHS = {
+        # Rubin/LSST
+        'u': 0.368, 'g': 0.476, 'r': 0.621, 'i': 0.754, 'z': 0.870, 'y': 0.971,
+        # HST/ACS
+        'F435W': 0.433, 'F475W': 0.474, 'F555W': 0.531, 'F606W': 0.591,
+        'F625W': 0.630, 'F775W': 0.769, 'F814W': 0.806, 'F850LP': 0.905,
+        # HST/WFC3
+        'F275W': 0.270, 'F336W': 0.335, 'F438W': 0.433, 'F547M': 0.545,
+        'F110W': 1.153, 'F125W': 1.249, 'F140W': 1.392, 'F160W': 1.537,
+        # JWST/NIRCam
+        'F070W': 0.704, 'F090W': 0.902, 'F115W': 1.154, 'F150W': 1.501,
+        'F200W': 1.989, 'F277W': 2.762, 'F356W': 3.568, 'F444W': 4.408,
+    }
+    
+    def __init__(self, config: Dict = None):
+        """Initialize data loader."""
+        self.config = config or {}
+        self.rubin_query = None
+    
+    def load(self, input_type: str = None, **kwargs):
+        """Load data based on input type specified in config or parameter."""
+        if input_type is None:
+            input_type = self.config.get('input', {}).get('type', 'file')
         
-        return preprocess_data(data)
+        print(f"[INPUT] Loading data with type: {input_type}")
+        
+        if input_type == 'rubin_id':
+            phot_data = self._load_rubin_id(**kwargs)
+        elif input_type == 'fits':
+            phot_data = self._load_fits(**kwargs)
+        elif input_type == 'file' or input_type == 'csv':
+            phot_data = self._load_file(**kwargs)
+        else:
+            raise ValueError(f"Unknown input type: {input_type}")
+        
+        # Check if external sources should be queried
+        if self.config.get('external_sources', {}).get('enabled', False):
+            ra = kwargs.get('ra') or phot_data.get('ra')
+            dec = kwargs.get('dec') or phot_data.get('dec')
+            
+            if ra is not None and dec is not None:
+                external_data = self._query_external_sources(ra, dec)
+                if external_data is not None:
+                    phot_data = self._combine_with_external(phot_data, external_data)
+        
+        return phot_data
+    
+    def _query_external_sources(self, ra, dec):
+        """Query external photometry sources."""
+        ext_config = self.config.get('external_sources', {})
+        
+        sources = ext_config.get('sources', ['galex', 'allwise', 'vista'])
+        radius_arcsec = ext_config.get('radius_arcsec', 10.0)
+        
+        print(f"\n[EXTERNAL] Querying external sources: {sources}")
+        
+        query = ExternalPhotometryQuery(self.config)
+        external_data = query.query_all_sources(ra, dec, radius_arcsec, sources)
+        
+        return external_data
+    
+    def _combine_with_external(self, primary_data, external_data):
+        """Combine primary data with external photometry."""
+        combiner = ExternalDataCombiner()
+        
+        ext_config = self.config.get('external_sources', {})
+        min_separation = ext_config.get('min_wavelength_separation_um', 0.05)
+        prefer_primary = ext_config.get('prefer_primary', True)
+        
+        combined = combiner.combine_with_external(
+            primary_data, external_data,
+            min_separation_um=min_separation,
+            prefer_primary=prefer_primary
+        )
+        
+        return combined
+    
+    def _load_file(self, filepath: str = None, **kwargs) -> Dict:
+        """Load photometry from a generic file (CSV, DAT, or FITS based on extension)."""
+        input_config = self.config.get('input', {})
+        filepath = filepath or input_config.get('filepath')
+        
+        if not filepath:
+            raise ValueError("No filepath specified in config or kwargs")
+        
+        filepath = Path(filepath)
+        ext = filepath.suffix.lower()
+        
+        print(f"[DATA LOADER] Loading file: {filepath}")
+        
+        if ext == '.fits' or ext == '.fit':
+            return self._load_fits(filepath=str(filepath), **kwargs)
+        elif ext == '.csv':
+            return self._load_csv(str(filepath))
+        elif ext == '.dat' or ext == '.txt':
+            return self._load_dat(str(filepath))
+        else:
+            # Try CSV first
+            try:
+                return self._load_csv(str(filepath))
+            except:
+                return self._load_dat(str(filepath))
+    
+    def _load_rubin_id(self, object_id: Union[int, List[int]], 
+                       token: str = None,
+                       flux_type: str = "cModelFlux",
+                       bands: List[str] = None) -> Dict:
+        """Load data by querying Rubin TAP service with object ID."""
+        from .rubin_query import RubinDataQuery
+        
+        # Always create fresh query with provided token
+        self.rubin_query = RubinDataQuery(token=token)
+        
+        if self.rubin_query.tap_service is None:
+            raise RuntimeError("Failed to initialize TAP service. Check your token.")
+        
+        df = self.rubin_query.query_object(object_id)
+        phot_data = self.rubin_query.extract_photometry(df, flux_type=flux_type, bands=bands)
+        
+        # Add metadata
+        phot_data['object_id'] = str(object_id)
+        phot_data['source'] = 'rubin_tap'
+        
+        return phot_data
+    
+    def _load_rubin_tap(self, ra: float, dec: float, 
+                        radius_arcsec: float = 10.0,
+                        token: str = None,
+                        flux_type: str = "cModelFlux",
+                        bands: List[str] = None,
+                        select_brightest: bool = True) -> Dict:
+        """Load data by querying Rubin TAP service with coordinates."""
+        from .rubin_query import RubinDataQuery
+        
+        # Always create fresh query with provided token
+        self.rubin_query = RubinDataQuery(token=token)
+        
+        if self.rubin_query.tap_service is None:
+            raise RuntimeError("Failed to initialize TAP service. Check your token.")
+        
+        df = self.rubin_query.query_region(ra, dec, radius_arcsec)
+        
+        if select_brightest and len(df) > 1:
+            flux_col = f"r_{flux_type}" if f"r_{flux_type}" in df.columns else None
+            if flux_col:
+                df = df.loc[[df[flux_col].idxmax()]]
+                print(f"[DATA LOADER] Selected brightest source from {len(df)} candidates")
+        
+        phot_data = self.rubin_query.extract_photometry(df, flux_type=flux_type, bands=bands)
+        
+        # Add metadata
+        phot_data['object_id'] = f"ra{ra:.4f}_dec{dec:.4f}"
+        phot_data['source'] = 'rubin_tap'
+        phot_data['ra'] = ra
+        phot_data['dec'] = dec
+        
+        return phot_data
+    
+    def _load_fits(self, **kwargs):
+        """Load photometry from a FITS file (e.g., PHANGS catalogs)."""
+        input_config = self.config.get('input', {})
+        filepath = kwargs.get('filepath') or input_config.get('filepath')
+        row_index = kwargs.get('row_index', input_config.get('row_index', 0))
+        
+        if not filepath:
+            raise ValueError("No FITS filepath specified in config or kwargs")
+        
+        print(f"[FITS] Loading: {filepath}")
+        print(f"[FITS] Row index: {row_index}")
+        
+        # Get column mapping from config
+        column_mapping = input_config.get('column_mapping', {})
+        flux_columns = column_mapping.get('flux_columns', {})
+        error_columns = column_mapping.get('error_columns', {})
+        flux_unit = input_config.get('flux_unit', 'mJy')
+        
+        # Get filter wavelengths from config
+        filter_wavelengths = self.config.get('filters', {})
+        
+        # Open FITS file
+        with fits.open(filepath) as hdul:
+            # Data is typically in extension 1 for binary tables
+            data = Table.read(hdul[1])
+        
+        print(f"[FITS] Total rows in catalog: {len(data)}")
+        
+        # Get the specific row
+        if row_index is not None and row_index < len(data):
+            row = data[row_index]
+        else:
+            raise ValueError(f"Row index {row_index} out of range (0-{len(data)-1})")
+        
+        # Extract metadata if available
+        id_col = column_mapping.get('id', 'ID_PHANGS_CLUSTER')
+        ra_col = column_mapping.get('ra', 'PHANGS_RA')
+        dec_col = column_mapping.get('dec', 'PHANGS_DEC')
+        
+        object_id = row[id_col] if id_col in data.colnames else row_index
+        ra = row[ra_col] if ra_col in data.colnames else None
+        dec = row[dec_col] if dec_col in data.colnames else None
+        
+        print(f"[FITS] Object ID: {object_id}")
+        if ra and dec:
+            print(f"[FITS] Coordinates: RA={ra:.6f}, Dec={dec:.6f}")
+        
+        # Extract photometry
+        wavelengths = []
+        fluxes = []
+        flux_errs = []
+        bands = []
+        
+        # Unit conversion factor
+        if flux_unit.lower() == 'mjy':
+            unit_factor = 1e-3  # mJy to Jy
+        elif flux_unit.lower() == 'ujy' or flux_unit.lower() == 'µjy':
+            unit_factor = 1e-6  # µJy to Jy
+        elif flux_unit.lower() == 'njy':
+            unit_factor = 1e-9  # nJy to Jy
+        else:
+            unit_factor = 1.0  # Assume already in Jy
+        
+        print(f"\n[FITS] Extracting photometry ({flux_unit} -> Jy, factor={unit_factor}):")
+        
+        for band, flux_col in flux_columns.items():
+            if flux_col not in data.colnames:
+                print(f"  {band}: Column '{flux_col}' not found (skipped)")
+                continue
+            
+            flux_val = row[flux_col]
+            
+            # Get error column
+            err_col = error_columns.get(band)
+            if err_col and err_col in data.colnames:
+                err_val = row[err_col]
+            else:
+                err_val = 0.05 * abs(flux_val)  # 5% default error
+            
+            # Skip invalid values (-9999 typically means no coverage)
+            if flux_val <= 0 or flux_val == -9999:
+                print(f"  {band}: Invalid flux value {flux_val} (skipped)")
+                continue
+            
+            # Get wavelength for this band
+            if band in filter_wavelengths:
+                wavelength = filter_wavelengths[band]
+            else:
+                print(f"  {band}: No wavelength defined in config (skipped)")
+                continue
+            
+            # Convert to Jy
+            flux_jy = flux_val * unit_factor
+            err_jy = abs(err_val) * unit_factor
+            
+            wavelengths.append(wavelength)
+            fluxes.append(flux_jy)
+            flux_errs.append(err_jy)
+            bands.append(band)
+            
+            print(f"  {band}: {flux_val:.4e} {flux_unit} = {flux_jy:.4e} Jy ± {err_jy:.4e} Jy")
+        
+        if len(wavelengths) == 0:
+            raise RuntimeError("No valid photometry found in FITS file")
+        
+        print(f"\n[FITS] Successfully extracted {len(bands)} bands: {bands}")
+        
+        # Return in standard SPECTRA format
+        return {
+            'wavelength': np.array(wavelengths),
+            'obs_flux': np.array(fluxes),
+            'obs_err': np.array(flux_errs),
+            'mod_flux': np.zeros(len(fluxes)),
+            'bands': bands,
+            'object_id': object_id,
+            'ra': ra,
+            'dec': dec,
+            'source_file': filepath,
+            'row_index': row_index
+        }
+    
+    def _load_dat(self, filepath: str) -> Dict:
+        """Load photometry from a .dat ASCII file."""
+        print(f"[DATA LOADER] Loading DAT file: {filepath}")
+        
+        # Try to read with automatic column detection
+        data = pd.read_csv(filepath, sep=r'\s+', comment='#',
+                          names=['wavelength', 'obs_flux', 'obs_err', 'mod_flux'])
+        
+        return {
+            'wavelength': data['wavelength'].values,
+            'obs_flux': data['obs_flux'].values,
+            'obs_err': data['obs_err'].values,
+            'mod_flux': data['mod_flux'].values,
+            'source': 'dat',
+            'filepath': filepath
+        }
+    
+    def _load_csv(self, filepath: str) -> Dict:
+        """Load photometry from a CSV file."""
+        print(f"[DATA LOADER] Loading CSV file: {filepath}")
+        
+        data = pd.read_csv(filepath)
+        wavelength = self._find_column(data, None, ['wavelength', 'wave', 'lambda'])
+        flux = self._find_column(data, None, ['obs_flux', 'flux', 'f_nu'])
+        flux_err = self._find_column(data, None, ['obs_err', 'flux_err', 'error'])
+        mod_flux = self._find_column(data, None, ['mod_flux', 'model_flux', 'model'])
+        
+        if wavelength is None or flux is None:
+            raise ValueError(f"Could not identify required columns in {filepath}")
+        
+        if flux_err is None:
+            flux_err = 0.1 * flux
+        if mod_flux is None:
+            mod_flux = np.zeros(len(flux))
+            
+        return {
+            'wavelength': np.array(wavelength),
+            'obs_flux': np.array(flux),
+            'obs_err': np.array(flux_err),
+            'mod_flux': np.array(mod_flux),
+            'source': 'csv',
+            'filepath': filepath
+        }
+    
+    def _find_column(self, df: pd.DataFrame, specified: str, 
+                     candidates: List[str]) -> Optional[np.ndarray]:
+        """Find a column in the dataframe."""
+        if specified and specified in df.columns:
+            return df[specified].values
+        
+        for candidate in candidates:
+            # Check exact match
+            if candidate in df.columns:
+                return df[candidate].values
+            # Check case-insensitive match
+            for col in df.columns:
+                if col.lower() == candidate.lower():
+                    return df[col].values
+        
+        return None
+    
+    def combine_datasets(self, datasets: List[Dict], 
+                        sort_by_wavelength: bool = True) -> Dict:
+        """
+        Combine multiple photometry datasets (e.g., Rubin + HST).
+        
+        Args:
+            datasets: List of photometry dictionaries
+            sort_by_wavelength: Sort combined data by wavelength
+        
+        Returns:
+            Combined photometry dictionary
+        """
+        wavelengths = []
+        fluxes = []
+        errors = []
+        sources = []
+        
+        for data in datasets:
+            wavelengths.extend(data['wavelength'])
+            fluxes.extend(data['obs_flux'])
+            errors.extend(data['obs_err'])
+            sources.extend([data.get('source', 'unknown')] * len(data['wavelength']))
+        
+        wavelengths = np.array(wavelengths)
+        fluxes = np.array(fluxes)
+        errors = np.array(errors)
+        
+        if sort_by_wavelength:
+            sort_idx = np.argsort(wavelengths)
+            wavelengths = wavelengths[sort_idx]
+            fluxes = fluxes[sort_idx]
+            errors = errors[sort_idx]
+            sources = [sources[i] for i in sort_idx]
+        
+        return {
+            'wavelength': wavelengths,
+            'obs_flux': fluxes,
+            'obs_err': errors,
+            'mod_flux': np.zeros(len(wavelengths)),
+            'sources': sources,
+            'n_datasets': len(datasets)
+        }

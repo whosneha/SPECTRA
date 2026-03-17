@@ -30,7 +30,7 @@ class Plotting:
         plt.rcParams['axes.facecolor'] = 'white'
         plt.rcParams['axes.linewidth'] = 1.0
     
-    def plot_sed(self, phot_data, results, ssp_model=None):
+    def plot_sed(self, phot_data, results, ssp_model=None, ax=None, **kwargs):
         """
         Plot observed vs model SED matching CIGALE reference style with multiple components.
         """
@@ -47,44 +47,47 @@ class Plotting:
         print(f"Model flux range: {mod_flux.min():.6e} to {mod_flux.max():.6e} Jy")
         print(f"Observed flux range: {obs_flux.min():.6e} to {obs_flux.max():.6e} Jy")
         
+        # Set wavelength range - WIDER for full SED view
+        wave_min = 0.1   # 0.1 µm (100 nm) - far UV
+        wave_max = 3.0   # 3.0 µm - extend into NIR
+        
         # Generate smooth spectrum components
         smooth_spectrum = None
         stellar_attenuated = None
         stellar_unattenuated = None
-        nebular_emission = None
         smooth_wavelengths_um = None
         
-        if ssp_model and not ssp_model.mock_mode:
+        if ssp_model is not None:
             try:
-                wav_min = 0.5
-                wav_max = 1.1
-                smooth_wavelengths_um = np.logspace(np.log10(wav_min), np.log10(wav_max), 300)
+                smooth_wavelengths_um = np.logspace(np.log10(wave_min), np.log10(wave_max), 500)
                 
+                # Generate model spectrum at best-fit parameters
                 smooth_spectrum = ssp_model.get_magnitudes(
                     wavelengths=smooth_wavelengths_um,
                     **results['parameters']
                 )
                 
-                stellar_unattenuated = smooth_spectrum * 1.3
-                stellar_attenuated = smooth_spectrum * 0.9
-                nebular_emission = np.zeros_like(smooth_wavelengths_um)
-                
-                z = ssp_model.redshift
-                emission_lines = {
-                    0.1216 * (1 + z): 0.2,
-                    0.1549 * (1 + z): 0.05,
-                }
-                
-                for line_wav, strength in emission_lines.items():
-                    if wav_min < line_wav < wav_max:
-                        sigma = 0.01
-                        nebular_emission += strength * smooth_spectrum.max() * np.exp(
-                            -((smooth_wavelengths_um - line_wav) / sigma) ** 2
-                        )
+                # Create attenuated/unattenuated versions for visualization
+                dust_av = results['parameters'].get('dust', 0.0)
+                if dust_av > 0:
+                    # Calzetti law approximation for visualization
+                    k_lambda = 2.659 * (-2.156 + 1.509/smooth_wavelengths_um - 
+                                        0.198/smooth_wavelengths_um**2 + 
+                                        0.011/smooth_wavelengths_um**3) + 4.05
+                    k_lambda = np.clip(k_lambda, 0, 20)
+                    attenuation = 10**(-0.4 * dust_av * k_lambda / 4.05)
+                    stellar_unattenuated = smooth_spectrum / np.clip(attenuation, 0.01, 1.0)
+                    stellar_attenuated = smooth_spectrum
+                else:
+                    stellar_unattenuated = smooth_spectrum * 1.0
+                    stellar_attenuated = smooth_spectrum * 1.0
                 
                 print(f"[PLOTTING] Generated smooth spectrum from {smooth_wavelengths_um.min():.3f} to {smooth_wavelengths_um.max():.3f} μm")
+                print(f"[PLOTTING] Spectrum flux range: {smooth_spectrum.min():.2e} to {smooth_spectrum.max():.2e} Jy")
             except Exception as e:
                 print(f"Could not generate smooth spectrum: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Create figure
         fig = plt.figure(figsize=(12, 8))
@@ -94,57 +97,59 @@ class Plotting:
         ax_res = fig.add_subplot(gs[1], sharex=ax_sed)
         
         # Add title with object ID and redshift
-        ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.2f})', fontsize=14, fontweight='bold')
+        ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.4f})', fontsize=14, fontweight='bold')
         
-        # Plot components
-        if stellar_unattenuated is not None:
+        # Plot components - smooth spectra first (background)
+        if stellar_unattenuated is not None and smooth_wavelengths_um is not None:
             ax_sed.plot(smooth_wavelengths_um, stellar_unattenuated, '--', linewidth=1.0, 
                        color='#F1C40F', label='Stellar unattenuated', zorder=1, alpha=0.8)
         
-        if stellar_attenuated is not None:
-            ax_sed.plot(smooth_wavelengths_um, stellar_attenuated, '-', linewidth=1.0, 
-                       color='#3498DB', label='Stellar attenuated', zorder=2, alpha=0.8)
+        if stellar_attenuated is not None and smooth_wavelengths_um is not None:
+            ax_sed.plot(smooth_wavelengths_um, stellar_attenuated, '-', linewidth=1.5, 
+                       color='#E74C3C', label='Model spectrum', zorder=2, alpha=0.9)
         
-        if nebular_emission is not None and np.any(nebular_emission > 0):
-            ax_sed.plot(smooth_wavelengths_um, nebular_emission, '-', linewidth=1.0, 
-                       color='#2ECC71', label='Nebular emission', zorder=2, alpha=0.8)
-        
-        if smooth_spectrum is not None:
-            ax_sed.plot(smooth_wavelengths_um, smooth_spectrum, '-', linewidth=2.0, 
-                       color='#E74C3C', label='Modeled spectrum', zorder=3)
-        
-        ax_sed.scatter(wavelength_um, mod_flux, s=100, marker='s', 
+        # Plot model photometry points
+        ax_sed.scatter(wavelength_um, mod_flux, s=120, marker='s', 
                       facecolor='#E74C3C', edgecolors='#C0392B', linewidth=1.5,
-                      label='Model photometric fluxes', zorder=5)
+                      label='Model photometry', zorder=5)
         
+        # Plot observed photometry with error bars
         ax_sed.errorbar(wavelength_um, obs_flux, yerr=obs_err, 
-                       fmt='o', markersize=10, capsize=4, capthick=2,
+                       fmt='o', markersize=12, capsize=4, capthick=2,
                        color='#2980B9', ecolor='#2980B9', elinewidth=2,
                        markeredgecolor='#1A5276', markeredgewidth=1.5,
-                       label='Observed photometric fluxes', zorder=6)
+                       label='Observed photometry', zorder=6)
         
         ax_sed.set_xscale('log')
         ax_sed.set_yscale('log')
         ax_sed.set_ylabel(r'$F_\nu$ [Jy]', fontsize=14)
-        ax_sed.set_xlim(0.5, 1.1)
         
+        # Set axis limits
+        ax_sed.set_xlim(wave_min, wave_max)
+        
+        # Y-axis: use all fluxes to set range
         all_flux = np.concatenate([obs_flux, mod_flux])
-        y_min = np.min(all_flux[all_flux > 0]) * 0.3
-        y_max = np.max(all_flux) * 5
+        if smooth_spectrum is not None:
+            valid_spectrum = smooth_spectrum[smooth_spectrum > 0]
+            if len(valid_spectrum) > 0:
+                all_flux = np.concatenate([all_flux, valid_spectrum])
+        
+        y_min = np.min(all_flux[all_flux > 0]) * 0.1
+        y_max = np.max(all_flux) * 10
         ax_sed.set_ylim(y_min, y_max)
         
         ax_sed.legend(loc='upper right', frameon=True, fancybox=False, 
-                     edgecolor='gray', fontsize=9, framealpha=0.95, ncol=2)
+                     edgecolor='gray', fontsize=10, framealpha=0.95)
         ax_sed.grid(True, alpha=0.3, linestyle='-', linewidth=0.3, which='both')
         ax_sed.tick_params(axis='x', which='both', labelbottom=False)
         
-        # Text box - add redshift
+        # Text box with fit parameters
         chi2 = -2 * results['log_likelihood']
         n_data = len(obs_flux)
         n_params = len(results['parameters'])
         reduced_chi2 = chi2 / (n_data - n_params) if n_data > n_params else chi2
         
-        textstr = f"z = {redshift:.2f}\n"
+        textstr = f"z = {redshift:.4f}\n"
         textstr += f"$\\chi^2_{{\\nu}}$ = {reduced_chi2:.2f}\n"
         for param, value in results['parameters'].items():
             if param == 'mass':
@@ -152,7 +157,7 @@ class Plotting:
             elif param == 'age':
                 textstr += f"Age = {value:.2f} Gyr\n"
             elif param == 'metallicity':
-                textstr += f"Z = {value:.2f}\n"
+                textstr += f"[Z/H] = {value:.2f}\n"
             elif param == 'dust':
                 textstr += f"E(B-V) = {value:.2f}\n"
         
@@ -160,7 +165,7 @@ class Plotting:
         ax_sed.text(0.03, 0.97, textstr.strip(), transform=ax_sed.transAxes, 
                    fontsize=10, verticalalignment='top', horizontalalignment='left', bbox=props)
         
-        # Residuals
+        # Residuals panel
         residuals = (obs_flux - mod_flux) / obs_err
         ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
                       facecolor='#2980B9', edgecolors='#1A5276', linewidth=1.5, zorder=3)
@@ -175,6 +180,7 @@ class Plotting:
         ax_res.set_ylabel(r'$\chi$', fontsize=14)
         res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
         ax_res.set_ylim(-res_max, res_max)
+        ax_res.set_xlim(wave_min, wave_max)
         ax_res.grid(True, alpha=0.3, linestyle='-', linewidth=0.3)
         plt.setp(ax_sed.get_xticklabels(), visible=False)
         fig.subplots_adjust(hspace=0)
