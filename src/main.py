@@ -17,6 +17,7 @@ from src.utils.plotting import Plotting
 from src.data.data_loader import DataLoader
 from src.data.rubin_query import RubinDataQuery
 from src.data.fornax_loader import load_fornax_csv
+from src.data.phangs_loader import load_phangs_fits
 
 
 def get_input_data(config):
@@ -35,9 +36,34 @@ def get_input_data(config):
     print(f"\n[INPUT] Loading data with type: {input_type}")
     
     # ---------------------------------------------------------------------
+    # PHANGS-HST FITS catalog (new)
+    # ---------------------------------------------------------------------
+    if input_type == 'phangs_fits':
+        filepath   = input_config.get('filepath')
+        max_rows   = input_config.get('max_rows', None)
+        row_indices = input_config.get('row_indices', None)
+        min_valid  = input_config.get('min_valid_bands', 3)
+        err_floor  = input_config.get('error_floor_frac', 0.05)
+
+        if not filepath:
+            raise ValueError("filepath must be specified for phangs_fits input type")
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"PHANGS FITS not found: {filepath}")
+
+        print(f"[INPUT] Loading PHANGS catalog: {filepath}")
+        datasets = load_phangs_fits(
+            filepath,
+            row_indices=row_indices,
+            max_rows=max_rows,
+            min_valid_bands=min_valid,
+            error_floor_frac=err_floor,
+        )
+        print(f"[INPUT] Loaded {len(datasets)} clusters")
+
+    # ---------------------------------------------------------------------
     # Fornax GC CSV (new)
     # ---------------------------------------------------------------------
-    if input_type == 'fornax_csv':
+    elif input_type == 'fornax_csv':
         filepath = input_config.get('filepath')
         if not filepath:
             raise ValueError("filepath must be specified for fornax_csv input type")
@@ -271,10 +297,11 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
     print(f"PROCESSING: {object_id}")
     print(f"{'='*70}")
 
-    # Priority: 1) redshift already in phot_data (from CSV), 2) filename, 3) config default
-    if phot_data.get('redshift') and phot_data['redshift'] != 0.0:
-        redshift = float(phot_data['redshift'])
-        print(f"Using redshift from data: z = {redshift}")
+    # Priority: 1) redshift in phot_data (set by loader), 2) filename, 3) config default
+    phot_redshift = phot_data.get('redshift', None)
+    if phot_redshift is not None:
+        redshift = float(phot_redshift)
+        print(f"Using redshift from data loader: z = {redshift}")
     else:
         redshift = extract_redshift_from_filename(object_id)
         if redshift is None:
@@ -290,16 +317,22 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
     ssp_config['redshift'] = redshift
     ssp_model = SSPModel(ssp_config)
     
-    # Calibrate mock model to observed flux levels
-    ssp_model.set_flux_calibration(phot_data['obs_flux'])
-    
-    # Debug calibration
+    # Calibrate model to observed flux levels using prior midpoint
+    ssp_model.set_flux_calibration(phot_data['obs_flux'], wavelengths=phot_data['wavelength'])
+
+    # Debug calibration using midpoint of prior range
+    priors_numeric_debug = {p: [float(b) for b in config['fitting']['priors'][p]]
+                            for p in config['fitting']['parameters']}
+    mid_mass = sum(priors_numeric_debug['mass']) / 2
+    mid_age  = sum(priors_numeric_debug['age'])  / 2
+    mid_met  = sum(priors_numeric_debug['metallicity']) / 2
+
     test_flux = ssp_model.get_magnitudes(
-        mass=12.0, age=0.1, metallicity=-0.5, dust=0.0,
+        mass=mid_mass, age=mid_age, metallicity=mid_met, dust=0.0,
         wavelengths=phot_data['wavelength']
     )
-    print(f"[CALIBRATION] At mass=12, age=0.1:")
-    print(f"  Model: {test_flux.min():.2e} to {test_flux.max():.2e} Jy")
+    print(f"[CALIBRATION] At mass={mid_mass:.1f}, age={mid_age:.2f} Gyr:")
+    print(f"  Model:    {test_flux.min():.2e} to {test_flux.max():.2e} Jy")
     print(f"  Observed: {phot_data['obs_flux'].min():.2e} to {phot_data['obs_flux'].max():.2e} Jy")
     
     # Convert priors to numeric
@@ -316,14 +349,37 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
         error_floor=error_floor
     )
     
-    # Initialize parameters
+    # Initialize parameters — use smarter starting guesses
     initial_params = {}
     bounds = []
     for p in config['fitting']['parameters']:
         pmin, pmax = priors_numeric[p]
         initial_params[p] = (pmin + pmax) / 2.0
         bounds.append((pmin, pmax))
-    
+
+    # If FSPS is active, estimate mass from observed flux to get a better start
+    if not ssp_model.mock_mode:
+        # Estimate mass by computing flux at mid params and comparing to observed
+        test_mass = initial_params['mass']
+        test_flux = ssp_model.get_magnitudes(
+            mass=test_mass,
+            age=initial_params.get('age', 0.01),
+            metallicity=initial_params.get('metallicity', -0.5),
+            dust=0.0,
+            wavelengths=phot_data['wavelength']
+        )
+        median_obs  = np.median(phot_data['obs_flux'])
+        median_mod  = np.median(test_flux)
+        if median_mod > 0 and np.isfinite(median_mod):
+            mass_correction = np.log10(median_obs / median_mod)
+            initial_params['mass'] = np.clip(
+                test_mass + mass_correction,
+                priors_numeric['mass'][0],
+                priors_numeric['mass'][1]
+            )
+            print(f"[INIT] Adjusted initial mass: {test_mass:.2f} → {initial_params['mass']:.2f} "
+                  f"(flux ratio correction: {mass_correction:+.2f} dex)")
+
     # Create output directory
     base_output_dir = config['plotting']['output_dir']
     object_output_dir = os.path.join(base_output_dir, object_id)
@@ -356,6 +412,12 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
         
         plotting = Plotting(plot_config)
         plotting.plot_corner(results['samples'], config['fitting']['parameters'])
+        
+        # Add trace plot for burn-in diagnostics
+        if 'chain' in results:
+            plotting.plot_trace(results['chain'], config['fitting']['parameters'],
+                               burn_in=mcmc_config.get('burn_in', 500))
+
     else:
         raise ValueError(f"Unknown fitting method: {fitting_method}")
 
@@ -372,12 +434,24 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
     dof       = max(n_bands - n_params, 1)
     chi2_red  = chi2 / dof
 
+    # Add SNR diagnostic
+    snr = obs_flux / obs_err
+    
     print(f"\n[CHI2] Chi-squared diagnostics for {object_id}:")
     print(f"  Bands: {phot_data.get('bands', n_bands)}")
+    print(f"  SNR per band: {', '.join([f'{s:.1f}' for s in snr])}")
     print(f"  Chi2 = {chi2:.3f}  |  DOF = {dof}  |  Chi2/DOF = {chi2_red:.3f}")
+    
     for i, band in enumerate(phot_data.get('bands', range(n_bands))):
+        frac_err = obs_err[i] / obs_flux[i] * 100
         print(f"  {band}: obs={obs_flux[i]:.3e} Jy  mod={mod_flux[i]:.3e} Jy  "
-              f"residual={residuals[i]:+.2f} sigma")
+              f"err={frac_err:.1f}%  residual={residuals[i]:+.2f}σ")
+    
+    # Identify problematic bands
+    outlier_bands = [phot_data.get('bands', range(n_bands))[i] 
+                     for i, r in enumerate(residuals) if abs(r) > 2.5]
+    if outlier_bands:
+        print(f"  ⚠ Outlier bands (>2.5σ): {', '.join(outlier_bands)}")
 
     results['chi2']     = chi2
     results['chi2_red'] = chi2_red
@@ -413,13 +487,13 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
             print(f"  {param}: {value:.4f}")
     print(f"  Log-likelihood : {results['log_likelihood']:.2f}")
     print(f"  Chi2/DOF       : {chi2_red:.3f}  ({'good' if chi2_red < 2 else 'poor — check model/data'})")
-    
+
     # Add metadata
     results['object_id'] = object_id
     results['output_dir'] = object_output_dir
     results['redshift'] = redshift
-    
-    return results
+
+    return results    
 
 
 def _plot_residuals(phot_data, results, plot_config, object_id):
@@ -495,7 +569,7 @@ def main(config_path: str | None = None) -> None:
 
     with open(config_path, 'r') as config_file:
         config = yaml.safe_load(config_file)
-
+    
     # Get input data
     try:
         datasets = get_input_data(config)
@@ -522,7 +596,6 @@ def main(config_path: str | None = None) -> None:
     all_results = []
     for i, (object_id, phot_data) in enumerate(datasets):
         print(f"\n[{i+1}/{len(datasets)}] Processing {object_id}...")
-        
         try:
             result = process_single_object(object_id, phot_data, config, ssp_model_base_config)
             all_results.append(result)

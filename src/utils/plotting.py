@@ -34,16 +34,17 @@ class Plotting:
         """
         Plot observed vs model SED matching CIGALE reference style with multiple components.
         """
-        wavelength = phot_data['wavelength']
+        wavelength = phot_data['wavelength']      # Angstroms from loader
         obs_flux = phot_data['obs_flux']
         obs_err = phot_data['obs_err']
         mod_flux = results['mod_flux']
         object_id = phot_data.get('object_id', 'unknown')
         redshift = phot_data.get('redshift', ssp_model.redshift if ssp_model else 0.0)
         
-        wavelength_um = wavelength
+        wavelength_um = wavelength / 1e4  # Convert Å → μm for plotting
         
         print("\n[PLOTTING DEBUG]")
+        print(f"Wavelength range: {wavelength.min():.0f} to {wavelength.max():.0f} Å")
         print(f"Model flux range: {mod_flux.min():.6e} to {mod_flux.max():.6e} Jy")
         print(f"Observed flux range: {obs_flux.min():.6e} to {obs_flux.max():.6e} Jy")
         
@@ -59,29 +60,28 @@ class Plotting:
         
         if ssp_model is not None:
             try:
-                smooth_wavelengths_um = np.logspace(np.log10(wave_min), np.log10(wave_max), 500)
-                
-                # Generate model spectrum at best-fit parameters
+                # Build wavelength grid in ANGSTROMS (model expects Å)
+                wav_smooth_aa = np.logspace(np.log10(1000.0), np.log10(30000.0), 300)  # 1000–30000 Å
+                params = results['parameters']
                 smooth_spectrum = ssp_model.get_magnitudes(
-                    wavelengths=smooth_wavelengths_um,
-                    **results['parameters']
+                    mass=params.get('mass', 4.5),
+                    age=params.get('age', 0.5),
+                    metallicity=params.get('metallicity', -0.5),
+                    dust=params.get('dust', 0.0),
+                    wavelengths=wav_smooth_aa
                 )
-                
-                # Create attenuated/unattenuated versions for visualization
-                dust_av = results['parameters'].get('dust', 0.0)
-                if dust_av > 0:
-                    # Calzetti law approximation for visualization
-                    k_lambda = 2.659 * (-2.156 + 1.509/smooth_wavelengths_um - 
-                                        0.198/smooth_wavelengths_um**2 + 
-                                        0.011/smooth_wavelengths_um**3) + 4.05
-                    k_lambda = np.clip(k_lambda, 0, 20)
-                    attenuation = 10**(-0.4 * dust_av * k_lambda / 4.05)
-                    stellar_unattenuated = smooth_spectrum / np.clip(attenuation, 0.01, 1.0)
-                    stellar_attenuated = smooth_spectrum
-                else:
-                    stellar_unattenuated = smooth_spectrum * 1.0
-                    stellar_attenuated = smooth_spectrum * 1.0
-                
+                # Convert to microns for plotting x-axis
+                smooth_wavelengths_um = wav_smooth_aa / 1e4
+
+                # Also generate unattenuated spectrum
+                stellar_unattenuated = ssp_model.get_magnitudes(
+                    mass=params.get('mass', 4.5),
+                    age=params.get('age', 0.5),
+                    metallicity=params.get('metallicity', -0.5),
+                    dust=0.0,
+                    wavelengths=wav_smooth_aa
+                )
+
                 print(f"[PLOTTING] Generated smooth spectrum from {smooth_wavelengths_um.min():.3f} to {smooth_wavelengths_um.max():.3f} μm")
                 print(f"[PLOTTING] Spectrum flux range: {smooth_spectrum.min():.2e} to {smooth_spectrum.max():.2e} Jy")
             except Exception as e:
@@ -104,8 +104,8 @@ class Plotting:
             ax_sed.plot(smooth_wavelengths_um, stellar_unattenuated, '--', linewidth=1.0, 
                        color='#F1C40F', label='Stellar unattenuated', zorder=1, alpha=0.8)
         
-        if stellar_attenuated is not None and smooth_wavelengths_um is not None:
-            ax_sed.plot(smooth_wavelengths_um, stellar_attenuated, '-', linewidth=1.5, 
+        if smooth_spectrum is not None and smooth_wavelengths_um is not None:
+            ax_sed.plot(smooth_wavelengths_um, smooth_spectrum, '-', linewidth=1.5, 
                        color='#E74C3C', label='Model spectrum', zorder=2, alpha=0.9)
         
         # Plot model photometry points
@@ -125,8 +125,6 @@ class Plotting:
         ax_sed.set_ylabel(r'$F_\nu$ [Jy]', fontsize=14)
         
         # Set axis limits
-        ax_sed.set_xlim(wave_min, wave_max)
-        
         # Y-axis: use all fluxes to set range
         all_flux = np.concatenate([obs_flux, mod_flux])
         if smooth_spectrum is not None:
@@ -134,9 +132,14 @@ class Plotting:
             if len(valid_spectrum) > 0:
                 all_flux = np.concatenate([all_flux, valid_spectrum])
         
-        y_min = np.min(all_flux[all_flux > 0]) * 0.1
-        y_max = np.max(all_flux) * 10
+        y_min = np.min(all_flux[all_flux > 0]) * 0.3  # Less aggressive margin
+        y_max = np.max(all_flux) * 3.0
         ax_sed.set_ylim(y_min, y_max)
+        
+        # X-axis limits based on actual photometry coverage
+        x_min = wavelength_um.min() * 0.8
+        x_max = wavelength_um.max() * 1.3
+        ax_sed.set_xlim(x_min, x_max)
         
         ax_sed.legend(loc='upper right', frameon=True, fancybox=False, 
                      edgecolor='gray', fontsize=10, framealpha=0.95)
@@ -239,3 +242,52 @@ class Plotting:
             plt.close(fig)
         except ImportError:
             print("corner package not installed. Skipping corner plot.")
+    
+    def plot_trace(self, samples, param_names, burn_in=0):
+        """
+        Plot MCMC trace (walker evolution) for burn-in diagnostics.
+        
+        Args:
+            samples: MCMC chain array (nwalkers, nsteps, ndim)
+            param_names: List of parameter names
+            burn_in: Number of burn-in steps (for vertical line)
+        """
+        n_params = len(param_names)
+        fig, axes = plt.subplots(n_params, 1, figsize=(10, 2*n_params), sharex=True)
+        if n_params == 1:
+            axes = [axes]
+        
+        for i, (ax, param) in enumerate(zip(axes, param_names)):
+            # Plot all walker chains
+            ax.plot(samples[:, :, i].T, 'k', alpha=0.1, linewidth=0.5)
+            
+            if burn_in > 0:
+                ax.axvline(burn_in, color='red', linestyle='--', 
+                          linewidth=1.5, label='Burn-in')
+            
+            # Labels
+            if param == 'mass':
+                label = r'$\log M/M_\odot$'
+            elif param == 'age':
+                label = 'Age [Gyr]'
+            elif param == 'metallicity':
+                label = '[Z/H]'
+            elif param == 'dust':
+                label = 'E(B-V)'
+            else:
+                label = param
+            ax.set_ylabel(label, fontsize=10)
+            
+            if i == 0 and burn_in > 0:
+                ax.legend(loc='upper right', fontsize=8)
+        
+        axes[-1].set_xlabel('Step', fontsize=12)
+        fig.suptitle('MCMC Trace', fontsize=14, fontweight='bold')
+        fig.tight_layout()
+        
+        for fmt in self.formats:
+            filepath = os.path.join(self.output_dir, f'trace_plot.{fmt}')
+            fig.savefig(filepath, dpi=150, bbox_inches='tight')
+            print(f"Saved: {filepath}")
+        
+        plt.close(fig)

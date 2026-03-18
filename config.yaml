@@ -103,7 +103,7 @@ ssp_model:
 # Fitting Configuration
 # -----------------------------------------------------------------------------
 fitting:
-  method: "mcmc"           # changed from "ml" — required for corner plots
+  method: "mcmc"          
   parameters: [mass, age, metallicity, dust]
   priors:
     mass: [8.0, 14.0]

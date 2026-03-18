@@ -160,6 +160,18 @@ class MCMCRunner:
             **best_params
         )
         log_likelihood_best = self.likelihood.log_likelihood(mod_flux_best)
+
+        # Compute autocorrelation time if enough steps
+        try:
+            tau = self.sampler.get_autocorr_time(quiet=True)
+            print(f"\nAutocorrelation times:")
+            for i, param in enumerate(param_names):
+                print(f"  {param}: {tau[i]:.1f} steps")
+            max_tau = np.max(tau)
+            if self.n_steps < 50 * max_tau:
+                print(f"  ⚠ Warning: n_steps={self.n_steps} < 50×τ_max={50*max_tau:.0f}")
+        except Exception as e:
+            print(f"  Could not compute autocorrelation time: {e}")
         
         return {
             'samples': self.samples,

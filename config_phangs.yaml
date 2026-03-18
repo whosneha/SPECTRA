@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — PHANGS-HST IC 5332, first 10 clusters
+# Run with:  python -m src.main  (after setting config_path in main() or via CLI)
+# or:        python run.py --config config_phangs.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: phangs_fits
+  filepath: "/Users/snehanair/Downloads/catalogs 2/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits"
+  max_rows: 10          # process the first 10 clusters
+  min_valid_bands: 3
+  error_floor_frac: 0.05
+
+# ─── SSP model ────────────────────────────────────────────────────────────────
+ssp_model:
+  type: fsps
+  redshift: 0.00184         # IC 5332 systemic redshift (NED), fallback only
+  imf: chabrier             # was: 1 (int) — _get_imf_code expects a string
+  sfh: 0                    # 0=single burst (SSP), 1=tau model
+  dust_type: 2              # 0=power-law, 1=Gordon+03, 2=Calzetti+00
+  add_neb_emission: false   # clusters: nebular emission optional
+  smooth_velocity: false
+  distance_mpc: 9.01        # IC 5332 distance from NED (Tully-Fisher ~9 Mpc)
+
+# ─── Fitting ──────────────────────────────────────────────────────────────────
+fitting:
+  method: mcmc           # 'ml' (fast) or 'mcmc'
+  error_floor: 0.05
+
+  parameters:
+    - mass
+    - age
+    - metallicity
+    - dust
+
+  priors:
+    # log10(M/Msun): widen range for FSPS absolute flux matching
+    mass:         [2.0,  7.0]
+    # Age in Gyr: human-classified clusters span ~1 Myr – 1 Gyr
+    age:          [0.001, 1.0]
+    # log(Z/Zsun): IC 5332 is metal-poor, sub-solar metallicity expected
+    metallicity:  [-1.5,  0.3]
+    # E(B-V): low dust expected for class 1&2 compact clusters
+    dust:         [0.0,   1.5]  # Widen from 1.0 to allow higher E(B-V) if needed
+
+# ─── MCMC (only used if fitting.method = mcmc) ────────────────────────────────
+mcmc:
+  n_walkers:  64
+  n_steps:    3000
+  burn_in:    500
+  thin:       10
+
+# ─── Output / Plotting ────────────────────────────────────────────────────────
+plotting:
+  output_dir: "outputs/phangs_ic5332_top10_fsps"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true
