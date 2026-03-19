@@ -1,0 +1,50 @@
+# ═══════════════════════════════════════════════════════════════════════
+# SPECTRA: Batch Rubin/LSST Observations
+# ═══════════════════════════════════════════════════════════════════════
+# Three ways to process multiple Rubin objects:
+#   1. List of object IDs
+#   2. Cone search (multiple objects in a region)
+#   3. CSV file with object IDs
+# ═══════════════════════════════════════════════════════════════════════
+
+# ─── OPTION 1: List of Object IDs ────────────────────────────────────────
+input:
+  type: rubin_batch_ids
+  rubin_ids:
+    - 1234567890
+    - 9876543210
+    - 5555555555
+    - 1111111111
+    - 2222222222
+
+rubin:
+  rsp_token: YOUR_RSP_TOKEN_HERE
+  flux_type: psfFlux
+  bands: [u, g, r, i, z, y]
+
+ssp_model:
+  type: fsps
+  redshift: 0.05
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: true
+
+fitting:
+  method: ml              # Use ML for fast batch processing
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass:         [8.0,  13.0]
+    age:          [0.001, 13.5]
+    metallicity:  [-2.5,  0.5]
+    dust:         [0.0,   3.0]
+
+plotting:
+  output_dir: "outputs/rubin_batch"
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

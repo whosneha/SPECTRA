@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — Rubin/LSST photometry via RSP TAP service
+# Usage:
+#   spectra --config config_rubin.yaml
+#   spectra --rubin-id 1234567890 --token YOUR_TOKEN  # Quick mode
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: rubin_id              # Options: rubin_id, rubin_tap (cone search)
+  rubin_id: 1234567890        # Object ID in Rubin database
+  # For cone search instead:
+  # type: rubin_tap
+  # ra: 53.1234
+  # dec: -27.8765
+  # radius_arcsec: 1.0
+
+rubin:
+  rsp_token: YOUR_RSP_TOKEN_HERE    # Or set RSP_TOKEN environment variable
+  flux_type: psfFlux                 # Options: psfFlux, apFlux, cModelFlux
+  bands: [u, g, r, i, z, y]          # Rubin/LSST ugrizy bands
+
+# ─── Optional: Add external photometry ───────────────────────────────────────
+additional_data:
+  enabled: true
+  files:
+    - path: "data/galex_photometry.csv"
+      format: csv
+      # CSV should have columns: wavelength (Å), flux (Jy), flux_err (Jy)
+    
+    - path: "data/wise_photometry.csv"
+      format: csv
+
+# ─── SSP Model ────────────────────────────────────────────────────────────────
+ssp_model:
+  type: fsps                 # Options: fsps, bc03
+  redshift: 0.1              # Will be overridden if available from metadata/file name not rlly needed for low redshift/ high redshift shoudld be there
+  imf: chabrier              # Options: salpeter, chabrier, kroupa
+  sfh: 0                     # 0=SSP, 1=tau model
+  dust_type: 2               # 0=power-law, 1=Gordon, 2=Calzetti
+  add_neb_emission: true     # Include nebular emission lines / default not used
+
+# ─── Fitting ──────────────────────────────────────────────────────────────────
+fitting:
+  method: mcmc                # Options: ml (fast), mcmc (full posteriors)
+  error_floor: 0.05          # Minimum 5% fractional error
+
+  parameters:
+    - mass
+    - age
+    - metallicity
+    - dust
+
+  priors:
+    mass:         [8.0,  13.0]   # log10(M/Msun) 
+    age:          [0.001, 13.5]  # Gyr 
+    metallicity:  [-2.5,  0.5]   # log10(Z/Zsun)
+    dust:         [0.0,   3.0]   # E(B-V) mag
+
+# ─── MCMC (only used if the fitting method is mcmc) ────────────────────────────────
+mcmc:
+  n_walkers:  64
+  n_steps:    3000
+  burn_in:    500
+  thin:       10
+
+# ─── Output / Plotting ────────────────────────────────────────────────────────
+plotting:
+  output_dir: "outputs/rubin"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

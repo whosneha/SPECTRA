@@ -1,0 +1,44 @@
+# ═══════════════════════════════════════════════════════════════════════
+# SPECTRA: Single FITS File SED Fitting
+# ═══════════════════════════════════════════════════════════════════════
+# For a single FITS table with photometry columns
+# ═══════════════════════════════════════════════════════════════════════
+
+input:
+  type: fits
+  filepath: "data/my_photometry.fits"
+  row_index: 0                    # Optional: which row to process (default: 0)
+
+ssp_model:
+  type: fsps
+  redshift: 0.05                  # Will be overridden if FITS has REDSHIFT column
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+  distance_mpc: 100.0
+
+fitting:
+  method: ml                      # Use 'ml' for fast, 'mcmc' for uncertainties
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass:         [8.0,  12.0]
+    age:          [0.1,  13.5]
+    metallicity:  [-2.0,  0.5]
+    dust:         [0.0,   2.0]
+
+mcmc:
+  n_walkers:  32
+  n_steps:    1000
+  burn_in:    200
+  thin:       5
+
+plotting:
+  output_dir: "outputs/single_fits"
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

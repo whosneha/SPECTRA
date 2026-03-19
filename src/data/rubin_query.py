@@ -185,6 +185,54 @@ class RubinDataQuery:
         print(f"[RUBIN QUERY] Found {len(df)} object(s)")
         return df
     
+    def cone_search(self, ra, dec, radius_arcsec=60.0, flux_type='psfFlux', 
+                    bands=None, max_objects=None):
+        """
+        Perform cone search around coordinates.
+        
+        Args:
+            ra: Right ascension (degrees)
+            dec: Declination (degrees)
+            radius_arcsec: Search radius (arcseconds)
+            flux_type: Flux measurement type
+            bands: List of bands to retrieve
+            max_objects: Maximum number of objects to return
+        
+        Returns:
+            List of (object_id, phot_data) tuples
+        """
+        bands = bands or ['u', 'g', 'r', 'i', 'z', 'y']
+        radius_deg = radius_arcsec / 3600.0
+        
+        # TAP query for cone search
+        query = f"""
+        SELECT objectId, coord_ra, coord_dec,
+               {', '.join([f'{band}_{flux_type}' for band in bands])},
+               {', '.join([f'{band}_{flux_type}Err' for band in bands])}
+        FROM dp02_dc2_catalogs.Object
+        WHERE CONTAINS(POINT('ICRS', coord_ra, coord_dec),
+                      CIRCLE('ICRS', {ra}, {dec}, {radius_deg})) = 1
+        """
+        
+        if max_objects:
+            query += f" LIMIT {max_objects}"
+        
+        print(f"[RUBIN] Executing cone search query...")
+        results = self._execute_tap_query(query)
+        
+        datasets = []
+        for row in results:
+            obj_id = row['objectId']
+            
+            phot_data = self._extract_photometry(row, flux_type, bands)
+            phot_data['object_id'] = f"rubin_{obj_id}"
+            phot_data['ra'] = row['coord_ra']
+            phot_data['dec'] = row['coord_dec']
+            
+            datasets.append((f"rubin_{obj_id}", phot_data))
+        
+        return datasets
+    
     def extract_photometry(self, df: pd.DataFrame, 
                           flux_type: str = None,
                           bands: List[str] = None) -> Dict:

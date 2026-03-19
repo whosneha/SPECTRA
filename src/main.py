@@ -181,6 +181,113 @@ def get_input_data(config):
         datasets.append((object_id, phot_data))
     
     # ---------------------------------------------------------------------
+    # Batch Rubin Object IDs (NEW)
+    # ---------------------------------------------------------------------
+    elif input_type == 'rubin_batch_ids':
+        rubin_config = config.get('rubin', {})
+        token = rubin_config.get('rsp_token') or os.environ.get('RSP_TOKEN')
+        rubin_ids = input_config.get('rubin_ids', [])
+        
+        if not rubin_ids:
+            raise ValueError("rubin_ids list must be provided")
+        
+        print(f"[INPUT] Querying {len(rubin_ids)} Rubin objects...")
+        
+        for obj_id in rubin_ids:
+            try:
+                phot_data = data_loader.load(
+                    'rubin_id',
+                    object_id=obj_id,
+                    token=token,
+                    flux_type=rubin_config.get('flux_type', 'psfFlux'),
+                    bands=rubin_config.get('bands')
+                )
+                phot_data['object_id'] = f"rubin_{obj_id}"
+                datasets.append((f"rubin_{obj_id}", phot_data))
+                print(f"  ✓ Loaded objectId {obj_id}")
+            except Exception as e:
+                print(f"  ✗ Failed to load objectId {obj_id}: {e}")
+                continue
+    
+    # ---------------------------------------------------------------------
+    # Rubin Cone Search (NEW)
+    # ---------------------------------------------------------------------
+    elif input_type == 'rubin_cone_search':
+        from src.data.rubin_query import RubinDataQuery
+        
+        rubin_config = config.get('rubin', {})
+        token = rubin_config.get('rsp_token') or os.environ.get('RSP_TOKEN')
+        
+        ra = input_config.get('ra')
+        dec = input_config.get('dec')
+        radius_arcsec = input_config.get('radius_arcsec', 60.0)
+        max_objects = input_config.get('max_objects', None)
+        
+        if ra is None or dec is None:
+            raise ValueError("ra and dec required for cone search")
+        
+        print(f"[INPUT] Cone search: RA={ra:.4f}, Dec={dec:.4f}, radius={radius_arcsec}\"")
+        
+        rubin_query = RubinDataQuery(token=token)
+        
+        # Query returns list of (object_id, phot_data) tuples
+        try:
+            datasets = rubin_query.cone_search(
+                ra=ra,
+                dec=dec,
+                radius_arcsec=radius_arcsec,
+                flux_type=rubin_config.get('flux_type', 'psfFlux'),
+                bands=rubin_config.get('bands'),
+                max_objects=max_objects
+            )
+            print(f"[INPUT] Found {len(datasets)} objects in search region")
+        except Exception as e:
+            print(f"[ERROR] Cone search failed: {e}")
+            raise
+    
+    # ---------------------------------------------------------------------
+    # Rubin from CSV (NEW)
+    # ---------------------------------------------------------------------
+    elif input_type == 'rubin_from_csv':
+        import pandas as pd
+        
+        filepath = input_config.get('filepath')
+        id_column = input_config.get('id_column', 'object_id')
+        redshift_column = input_config.get('redshift_column', None)
+        
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError(f"CSV file not found: {filepath}")
+        
+        df = pd.read_csv(filepath)
+        object_ids = df[id_column].tolist()
+        
+        rubin_config = config.get('rubin', {})
+        token = rubin_config.get('rsp_token') or os.environ.get('RSP_TOKEN')
+        
+        print(f"[INPUT] Loading {len(object_ids)} objects from CSV: {filepath}")
+        
+        for idx, obj_id in enumerate(object_ids):
+            try:
+                phot_data = data_loader.load(
+                    'rubin_id',
+                    object_id=obj_id,
+                    token=token,
+                    flux_type=rubin_config.get('flux_type', 'psfFlux'),
+                    bands=rubin_config.get('bands')
+                )
+                
+                # Use redshift from CSV if available
+                if redshift_column and redshift_column in df.columns:
+                    phot_data['redshift'] = float(df.iloc[idx][redshift_column])
+                
+                phot_data['object_id'] = f"rubin_{obj_id}"
+                datasets.append((f"rubin_{obj_id}", phot_data))
+                print(f"  ✓ [{idx+1}/{len(object_ids)}] Loaded objectId {obj_id}")
+            except Exception as e:
+                print(f"  ✗ [{idx+1}/{len(object_ids)}] Failed objectId {obj_id}: {e}")
+                continue
+
+    # ---------------------------------------------------------------------
     # Single File (FITS, DAT, CSV)
     # ---------------------------------------------------------------------
     elif input_type in ['fits', 'dat', 'csv']:
@@ -413,9 +520,10 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
         plotting = Plotting(plot_config)
         plotting.plot_corner(results['samples'], config['fitting']['parameters'])
         
-        # Add trace plot for burn-in diagnostics
-        if 'chain' in results:
-            plotting.plot_trace(results['chain'], config['fitting']['parameters'],
+        # Add trace plot for burn-in diagnostics - FIX: get full chain from sampler
+        if 'sampler' in results:
+            chain = results['sampler'].get_chain()  # Shape: (nwalkers, nsteps, ndim)
+            plotting.plot_trace(chain, config['fitting']['parameters'],
                                burn_in=mcmc_config.get('burn_in', 500))
 
     else:

@@ -1,233 +1,121 @@
-# SPECTRA: Stellar Population & SED Fitting Tool for Resolved Clusters
+# SPECTRA
 
-**SPECTRA** (Stellar Population Extractor for Clusters via Template-fitted Resolved Aperture photometry) is a Python package for fitting spectral energy distributions (SEDs) of star clusters and galaxies using simple stellar population (SSP) models. It is designed to work out-of-the-box with LSST/Rubin Observatory photometry, PHANGS-HST catalogs, and user-supplied CSV/FITS data.
+**SED Parameter Estimation Code for The Rubin Astronomy**e Response Analysis**
 
-> For full documentation, tutorials, and API reference, see the [SPECTRA Docs](docs/) (ReadTheDocs link coming soon).
+A flexible SED fitting pipeline for stellar populations using multi-wavelength photometry. Designed for Rubin/LSST with native support for PHANGS-HST star clusters and custom catalogs.
 
----
-
-## Project Structure
-
-```text
-SPECTRA/
-├── src/
-│   └── spectra/               #  The actual source code
-│       ├── __init__.py        #   - Exposes the public API
-│       ├── cli.py             #   - Command-line interface entry point
-│       ├── main.py            #   - Top-level pipeline orchestration
-│       ├── fit.py             #   - SED fitter (maximum likelihood)
-│       ├── likelihood.py      #   - Likelihood function
-│       ├── io.py              #   - Generic photometry I/O
-│       ├── models/
-│       │   └── ssp_model.py   #   - SSP model wrapper (python-FSPS)
-│       ├── mcmc/
-│       │   └── mcmc_runner.py #   - MCMC fitting via emcee
-│       ├── data/
-│       │   ├── data_loader.py #   - Unified data loader (FITS/CSV/DAT)
-│       │   ├── fornax_loader.py #  - Loader for Fornax GC CSV format
-│       │   └── rubin_query.py #   - Rubin/LSST TAP query interface
-│       └── utils/
-│           └── plotting.py    #   - SED & corner plot generation
-│
-├── data/                      #  Sample & test datasets
-│   └── fornax_gc_photometry.csv  # Fornax dSph GC photometry (LSST)
-│
-├── tests/                     #  Unit tests
-│   ├── test_likelihood.py
-│   ├── test_ssp_model.py
-│   └── test_fornax_loader.py
-│
-├── docs/                      #  Documentation (Jupyter Book)
-│   ├── intro.md
-│   ├── installation.md
-│   ├── configuration.md
-│   ├── inputs.md
-│   ├── outputs.md
-│   └── tutorials/
-│       └── fornax_gc_demo.ipynb
-│
-├── config.yaml                #  User configuration file
-├── pyproject.toml             #  Build configuration & metadata
-├── .pre-commit-config.yaml    #  Automated code quality hooks
-└── README.md
-```
-
----
-
-## Installation & Setup
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/yourusername/SPECTRA.git
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+- 🌟 **Multi-wavelength SED fitting** — UV to NIR photometry
+--- **Rubin/LSST ready** — Direct TAP queries to Rubin Science Platform
+- 📊 **PHANGS-HST support** — Built-in loader for PHANGS star cluster catalogs
+## Featuresible models** — FSPS SSP models with Calzetti dust attenuation
+- 🔥 **Fast ML or full MCMC** — Maximum likelihood for batches, MCMC for uncertainties
+- Multi-wavelength SED fitting — UV to mid-IR photometry (GALEX + HST + JWST + Rubin + WISE)
+- Rubin/LSST ready — Direct TAP queries to Rubin Science Platform
+- PHANGS-HST support — Native FITS loader for PHANGS star cluster catalogs
+- Flexible SSP models — FSPS with Chabrier/Kroupa/Salpeter IMF + Calzetti dust
+- Fast ML or full MCMC — Maximum likelihood (seconds) or Bayesian posteriors (minutes)
+- Publication-quality plots — Customizable SED fits, corner plots, trace diagnostics
+- Easy to use — Simple YAML configs + command-line interface
+- Well-tested — Comprehensive pytest suite + Jupyter tutorial
 cd SPECTRA
-```
+---ort PATH="$PWD/bin:$PATH"
 
-### 2. Create a virtual environment (recommended)
-
+## Quick Start(PHANGS-HST star clusters)
+spectra --config config_phangs.yaml --max-rows 1 --method ml
 ```bash
-python -m venv spectra_venv
-source spectra_venv/bin/activate   # Windows: spectra_venv\Scripts\activate
-```
+# 1. Clone repositorytly
+git clone https://github.com/whosneha/SPECTRA.git
+cd SPECTRA
 
-### 3. Install in editable mode
-
+# 2. Add to PATH (makes 'spectra' command available)
+export PATH="$PWD/bin:$PATH"
+See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation instructions.
+# 3. Run example (PHANGS-HST cluster, fast ML fit)
+spectra --config config_phangs.yaml --max-rows 1 --method ml
 ```bash
-pip install -e .[dev]
+# Output: results in outputs/phangs_ic5332_top10_fsps/zshrc for permanent
 ```
 
-### 4. Verify installation
-
+---ional FSPS setup:
 ```bash
-spectra --help
-```
-
----
-
-## Quick Start
-
-### Run on the included Fornax GC sample data
-
+## Installation=/path/to/fsps
+pip install fsps
+### Option 1: Simple Wrapper (Recommended)
+No pip installation needed — just add to PATH:
+## Usage Examples
 ```bash
-spectra run --config config.yaml
-```
-
-### Run with a custom config
-
+cd SPECTRAe 1: PHANGS Star Clusters
+export PATH="$PWD/bin:$PATH"
+spectra --config config_phangs.yaml --method mcmc --max-rows 10
+# Make permanent by adding to shell config:
+echo 'export PATH="/path/to/SPECTRA/bin:$PATH"' >> ~/.zshrc  # macOS
+source ~/.zshrcRubin Quick Query
 ```bash
-spectra run --config path/to/my_config.yaml
+spectra --rubin-id 1234567890 --token $RSP_TOKEN
+### Option 2: Python Module
+Run directly without installation:
+### Example 3: Custom FITS Catalog
+```bash
+cd SPECTRAconfig my_catalog.yaml --output results/run01
+python run.py config_phangs.yaml
 ```
+See **[docs/USAGE.md](docs/USAGE.md)** for detailed usage guide.
+### Option 3: Pip Install (Developers)
+Install as a package:
 
-### Run programmatically
-
-```python
-from spectra import run_pipeline
-run_pipeline("config.yaml")
+```bash configs provided:
+cd SPECTRAg_phangs.yaml`** — PHANGS-HST star cluster catalogs
+pip install -e .n.yaml`** — Rubin/LSST TAP queries
+# 'spectra' command now available system-widecluster photometry
 ```
-
----
-
-## Input Types
-
-SPECTRA supports multiple input formats, selected via `input.type` in `config.yaml`:
-
-| `type`        | Description                                      |
-|---------------|--------------------------------------------------|
-| `fornax_csv`  | Multi-band CSV (see `data/fornax_gc_photometry.csv`) |
-| `fits_batch`  | Directory of FITS catalogs (e.g. PHANGS-HST)    |
-| `fits`        | Single FITS file                                 |
-| `csv`         | Generic single CSV file                          |
-| `dat`         | Whitespace-delimited `.dat` file                 |
-| `file_list`   | List of files in config                          |
-| `rubin_id`    | Rubin/LSST TAP query by object ID                |
-| `rubin_tap`   | Rubin/LSST TAP query by RA/Dec coordinates       |
-
-See [`docs/inputs.md`](docs/inputs.md) for full details and column specifications.
-
----
-
-## Fitting Methods
-
-Set `fitting.method` in `config.yaml`:
-
-| Method | Description |
-|--------|-------------|
-| `ml`   | Maximum likelihood via `scipy.optimize` |
-| `mcmc` | MCMC posterior sampling via `emcee` |
-
----
-
-## Output
-
-All outputs are written to `plotting.output_dir` (default: `outputs/fornax_gc/`):
-
-```text
-outputs/fornax_gc/
-├── NGC1049/
-│   ├── sed_plot.png
-│   └── NGC1049_photometry.csv
-├── ESO356-SC001/
-│   └── ...
-└── fit_summary.csv        ← best-fit parameters for all objects
-```
-
----
-
-## Configuration Reference
-
-Key sections in `config.yaml`:
-
-```yaml
-input:
-  type: "fornax_csv"          # Input format (see table above)
-  filepath: data/fornax_gc_photometry.csv
-
+### Basic Config Structure
+### Dependencies
+```bash
+pip install numpy scipy matplotlib astropy pyyaml pandas emcee corner h5py tqdm
+```ype: phangs_fits
+  filepath: "catalog.fits"
+### Optional: FSPS (Real SSP Models)
+For production use, install FSPS:
 ssp_model:
-  type: "fsps"                # SSP library
-  imf: "kroupa"               # IMF: kroupa | chabrier | salpeter
-  dust_model: "calzetti"      # Dust law
-  distance_mpc: 1.48          # Physical distance in Mpc
-  redshift: 0.00032           # Redshift
-
+```bash fsps
+# Download and build FSPS
+git clone https://github.com/cconroy20/fsps.git
+cd fsps/src && make
 fitting:
-  method: "ml"                # ml | mcmc
-  parameters: [mass, age, metallicity, dust]
-  priors:
-    mass:        [8.0, 14.0]  # log(M/Msun)
-    age:         [0.01, 13.5] # Gyr
-    metallicity: [-2.5, 0.5]  # [Z/H]
-    dust:        [0.0, 2.0]   # E(B-V)
-  error_floor: 0.05           # Fractional flux error floor
-
-plotting:
-  output_dir: outputs/fornax_gc
-  formats: [png]
+# Set environment variable
+export SPS_HOME=/path/to/fspsallicity, dust]
+echo 'export SPS_HOME=/path/to/fsps' >> ~/.zshrc
+    mass: [3.0, 6.0]
+# Install Python wrapper
+pip install fsps [-1.5, 0.3]
+``` dust: [0.0, 1.5]
 ```
-
-See [`docs/configuration.md`](docs/configuration.md) for all options.
-
----
-
-## Running Tests
-
-```bash
-pip install pytest
-pytest tests/
-```
-
----
-
-## Development Tools
-
-### Code quality
-
-```bash
-ruff check .
-ruff format .
-mypy src/
-```
-
-### Pre-commit hooks (run automatically on every commit)
-
-```bash
-pip install pre-commit
-pre-commit install
-```
-
-### Build documentation locally
-
-```bash
-pip install jupyter-book
-jupyter-book build docs/
-```
-
----
-
+**Without FSPS**: Pipeline uses physically-motivated mock SSP models (good for testing/development).
+## Documentation
+See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation guide.
+- **[Installation Guide](docs/INSTALL.md)** — Setup and dependencies
+---*[Usage Guide](docs/USAGE.md)** — Detailed examples and config reference
+- **[API Reference](docs/API.md)** — For developers
+## Usage Examples
 ## Citation
-
+### Example 1: PHANGS-HST Star Clusters (FITS Catalog)
 If you use SPECTRA in your research, please cite:
-
+```bash
+# Fit 10 clusters with MCMC
+spectra --config config_phangs.yaml --method mcmc --max-rows 10
+  author = {Your Name},
+# Output: outputs/phangs_ic5332_top10_fsps/Fitting Pipeline},
+#   - fit_summary.csv (all results)
+#   - IC5332_cluster0001_row0000/sername/SPECTRA}
+#       ├── sed_fit_*.png (SED plot)
+#       ├── corner_plot.png (posteriors)
+#       ├── trace_plot.png (convergence)
+#       └── *_photometry.csv (data table)
 ```
-Nair et al. (in prep), SPECTRA: Stellar Population Extractor for Clusters
-via Template-fitted Resolved Aperture photometry
-```
+MIT License — see [LICENSE](LICENSE)
+### Example 2: Rubin/LSST Quick Query
+## Contact
+```bash
+# Query single object by ID (requires RSP token)example.com](mailto:your.email@example.com)export RSP_TOKEN="your_token_here"spectra --rubin-id 1234567890 --token $RSP_TOKEN# Or with config filespectra --config config_rubin.yaml```### Example 3: Batch Processing Multiple Galaxies```bash# Process list of Rubin objectsspectra --config config_rubin_batch.yaml --method ml# Or cone search around coordinatesspectra --config config_rubin_cone_search.yaml```### Example 4: Custom FITS/CSV Catalog```bash# Single FITS filespectra --config config_single_fits.yaml# Directory of FITS filesspectra --config config_fits_batch.yaml```See **[docs/USAGE.md](docs/USAGE.md)** for detailed examples and **[docs/OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md)** for understanding results.---## ConfigurationSPECTRA uses YAML config files. Example configs provided:| Config File | Purpose | Input Type ||------------|---------|------------|| **`config_phangs.yaml`** | PHANGS-HST star clusters | FITS catalog || **`config_rubin.yaml`** | Rubin/LSST TAP query | Single object || **`config_rubin_batch.yaml`** | Multiple Rubin objects | List of IDs || **`config_rubin_cone_search.yaml`** | Spatial search | RA/Dec cone || **`config_single_fits.yaml`** | Single FITS table | FITS file || **`config_custom_plotting.yaml`** | Plot customization demo | Any |### Minimal Config Structure```yamlinput:  type: phangs_fits              # or: rubin_id, fits, csv, fits_batch  filepath: "catalog.fits"        # path to data file  max_rows: 10                    # process first 10 objectsssp_model:  type: fsps                      # or: mock (no FSPS needed)  imf: chabrier                   # or: salpeter, kroupa  dust_type: 2                    # 2=Calzetti, 1=Gordon, 3=MWfitting:  method: mcmc                    # or: ml (faster)  error_floor: 0.05               # 5% systematic error  parameters: [mass, age, metallicity, dust]  priors:    mass: [2.0, 7.0]              # log10(M/Msun) for clusters    age: [0.001, 1.0]             # Gyr    metallicity: [-1.5, 0.3]      # log10(Z/Zsun)    dust: [0.0, 1.5]              # E(B-V)mcmc:                             # only if method=mcmc  n_walkers: 64  n_steps: 3000  burn_in: 500plotting:  output_dir: "outputs/my_run"  save_plots: true  dpi: 300                        # high-res for publication```---## Supported Input Formats| Format | Description | Example Use Case ||--------|-------------|------------------|| **PHANGS FITS** | PHANGS-HST cluster catalogs | `type: phangs_fits` || **Fornax CSV** | Globular cluster photometry | `type: fornax_csv` || **Rubin TAP** | Query by object ID or coords | `type: rubin_id` or `rubin_tap` || **Generic FITS** | Single FITS binary table | `type: fits` || **Generic CSV** | Custom photometry tables | `type: csv` || **DAT files** | Legacy ASCII format | `type: dat` || **Batch FITS** | Directory of FITS files | `type: fits_batch` |**Required CSV/FITS columns**: `wavelength` (Å), `flux` (Jy), `flux_err` (Jy), `band` (optional)---## Output FilesSPECTRA generates per-object directories with:| File | Description | When Generated ||------|-------------|----------------|| **`fit_summary.csv`** | Combined results table (all objects) | Always || **`sed_fit_*.png`** | SED plot with model + residuals | Always || **`corner_plot.png`** | MCMC posterior distributions | MCMC only || **`trace_plot.png`** | Walker convergence diagnostics | MCMC only || **`residuals.png`** | Per-band χ residuals | Always || **`*_photometry.csv`** | Data table (obs + model flux) | If enabled || **`mcmc_samples.h5`** | Raw MCMC chain (HDF5) | MCMC only |Example directory structure:```outputs/phangs_ic5332_top10_fsps/├── fit_summary.csv├── IC5332_cluster0001_row0000/│   ├── sed_fit_IC5332_cluster0001_row0000.png│   ├── corner_plot.png│   ├── trace_plot.png│   └── IC5332_cluster0001_row0000_photometry.csv└── IC5332_cluster0002_row0001/    └── ...```See **[docs/OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md)** for complete output reference.---## Testing```bash# Install test dependenciespip install -e ".[test]"# Run all testspytest tests/ -v# Run fast tests onlypytest tests/ -m "not slow" -v# With coverage reportpytest tests/ --cov=src --cov-report=html```Try the **Jupyter tutorial** on Rubin Science Platform:```bashjupyter notebook notebooks/SPECTRA_RSP_Tutorial.ipynb```See **[docs/TESTING.md](docs/TESTING.md)** for testing guide.---## Documentation- **[INSTALL.md](docs/INSTALL.md)** — Installation instructions (simple wrapper, pip, FSPS setup)- **[USAGE.md](docs/USAGE.md)** — Detailed usage examples and config reference- **[OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md)** — Understanding all output files- **[TESTING.md](docs/TESTING.md)** — Running tests and Jupyter tutorial- **[EXAMPLE_MULTIBAND_CONFIG.md](docs/EXAMPLE_MULTIBAND_CONFIG.md)** — Rubin + GALEX + WISE example---## Science Use CasesSPECTRA has been tested on:- ✅ **PHANGS-HST star clusters** (5-band HST/UVIS photometry)- ✅ **Fornax globular clusters** (ugrizY optical photometry)- ✅ **Rubin/LSST DP0.2** (ugrizy photometry via TAP)- ✅ **Multi-wavelength galaxies** (GALEX + HST + Rubin + WISE)**Typical runtime**:- ML fitting: **~1 second per object** (good for 100+ objects)- MCMC fitting: **~2 minutes per object** (full posteriors + uncertainties)**Typical χ²/DOF**:- Star clusters (5 bands): **1.5–3.0** (acceptable)- Galaxies (12 bands): **1.0–2.0** (excellent)See chi-squared guide in **[docs/OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md#are-my-chi-squared-values-bad)**.---## CitationIf you use SPECTRA in your research, please cite:```bibtex@software{spectra2024,  author = {Sneha Nair},  title = {SPECTRA: SED Parameter Estimation Code for The Rubin Astronomy},  year = {2024},  url = {https://github.com/whosneha/SPECTRA},  note = {Stellar population SED fitting pipeline for Rubin/LSST}}```---## ContributingContributions welcome! Please:1. Fork the repository2. Create a feature branch (`git checkout -b feature/new-model`)3. Add tests for new functionality (`tests/test_*.py`)4. Run tests (`pytest tests/ -v`)5. Submit a pull requestSee **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** for guidelines.---## LicenseMIT License — see [LICENSE](LICENSE)---## Contact**Sneha Nair**  GitHub: [@whosneha](https://github.com/whosneha)  Project: [github.com/whosneha/SPECTRA](https://github.com/whosneha/SPECTRA)Questions or bug reports? Open an issue: [Issues](https://github.com/whosneha/SPECTRA/issues)---## Acknowledgments- **FSPS**: Charlie Conroy ([github.com/cconroy20/fsps](https://github.com/cconroy20/fsps))- **emcee**: Dan Foreman-Mackey ([github.com/dfm/emcee](https://github.com/dfm/emcee))- **PHANGS-HST**: Lee et al. (2022), ApJS, 258, 10- **Rubin Observatory**: [www.lsst.org](https://www.lsst.org)Special thanks to the Rubin Science Platform team for DP0.2 data access.---**SPECTRA v1.0.0** — December 2024

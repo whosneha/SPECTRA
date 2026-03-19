@@ -12,68 +12,101 @@ class Plotting:
         Initialize plotting.
         
         Args:
-            config: Dict with output_dir and formats keys
+            config: Dict with output_dir and customization options
         """
         self.output_dir = config.get('output_dir', './results')
         self.formats = config.get('formats', ['png'])
         os.makedirs(self.output_dir, exist_ok=True)
         
-        # Set style - clean white background matching reference
-        plt.rcParams['font.family'] = 'sans-serif'
-        plt.rcParams['font.size'] = 11
-        plt.rcParams['axes.labelsize'] = 12
-        plt.rcParams['axes.titlesize'] = 12
-        plt.rcParams['xtick.labelsize'] = 10
-        plt.rcParams['ytick.labelsize'] = 10
-        plt.rcParams['legend.fontsize'] = 8
+        # ── Plot Customization ──
+        self.plot_style = config.get('plot_style', 'default')
+        self.figure_size = tuple(config.get('figure_size', [12, 8]))
+        self.dpi = config.get('dpi', 150)
+        self.show_components = config.get('show_components', True)
+        self.show_error_bars = config.get('show_error_bars', True)
+        self.show_residuals = config.get('show_residuals', True)
+        self.show_parameter_box = config.get('show_parameter_box', True)
+        
+        # Wavelength/flux units
+        self.wavelength_units = config.get('wavelength_units', 'micron')
+        self.flux_units = config.get('flux_units', 'jy')
+        
+        # Color scheme
+        color_scheme = config.get('color_scheme', {})
+        self.colors = {
+            'observed': color_scheme.get('observed', '#2980B9'),
+            'model': color_scheme.get('model', '#E74C3C'),
+            'unattenuated': color_scheme.get('unattenuated', '#F1C40F'),
+            'residual_good': color_scheme.get('residual_good', '#2ECC71'),
+            'residual_warn': color_scheme.get('residual_warn', '#F39C12'),
+            'residual_bad': color_scheme.get('residual_bad', '#E74C3C'),
+        }
+        
+        # Marker styles
+        self.marker_size_obs = config.get('marker_size_obs', 12)
+        self.marker_size_model = config.get('marker_size_model', 120)
+        self.line_width = config.get('line_width', 1.5)
+        
+        # Legend settings
+        self.legend_location = config.get('legend_location', 'upper right')
+        self.legend_fontsize = config.get('legend_fontsize', 10)
+        
+        # Grid
+        self.show_grid = config.get('show_grid', True)
+        self.grid_alpha = config.get('grid_alpha', 0.3)
+        
+        # Set matplotlib style
+        self._set_plot_style()
+    
+    def _set_plot_style(self):
+        """Set matplotlib parameters based on plot_style."""
+        if self.plot_style == 'publication':
+            plt.rcParams['font.family'] = 'serif'
+            plt.rcParams['font.size'] = 14
+            plt.rcParams['axes.labelsize'] = 16
+            plt.rcParams['legend.fontsize'] = 12
+            plt.rcParams['xtick.labelsize'] = 14
+            plt.rcParams['ytick.labelsize'] = 14
+        elif self.plot_style == 'minimal':
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.size'] = 10
+            plt.rcParams['axes.labelsize'] = 11
+            plt.rcParams['legend.fontsize'] = 9
+        else:  # default
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.size'] = 11
+            plt.rcParams['axes.labelsize'] = 12
+            plt.rcParams['legend.fontsize'] = 10
+        
         plt.rcParams['figure.facecolor'] = 'white'
         plt.rcParams['axes.facecolor'] = 'white'
         plt.rcParams['axes.linewidth'] = 1.0
     
     def plot_sed(self, phot_data, results, ssp_model=None, ax=None, **kwargs):
-        """
-        Plot observed vs model SED matching CIGALE reference style with multiple components.
-        """
-        wavelength = phot_data['wavelength']      # Angstroms from loader
+        """Plot SED with full customization support."""
+        wavelength = phot_data['wavelength']
         obs_flux = phot_data['obs_flux']
         obs_err = phot_data['obs_err']
         mod_flux = results['mod_flux']
         object_id = phot_data.get('object_id', 'unknown')
         redshift = phot_data.get('redshift', ssp_model.redshift if ssp_model else 0.0)
         
-        wavelength_um = wavelength / 1e4  # Convert Å → μm for plotting
+        wavelength_um = wavelength / 1e4
         
-        print("\n[PLOTTING DEBUG]")
-        print(f"Wavelength range: {wavelength.min():.0f} to {wavelength.max():.0f} Å")
-        print(f"Model flux range: {mod_flux.min():.6e} to {mod_flux.max():.6e} Jy")
-        print(f"Observed flux range: {obs_flux.min():.6e} to {obs_flux.max():.6e} Jy")
-        
-        # Set wavelength range - WIDER for full SED view
-        wave_min = 0.1   # 0.1 µm (100 nm) - far UV
-        wave_max = 3.0   # 3.0 µm - extend into NIR
-        
-        # Generate smooth spectrum components
+        # Generate smooth spectrum
         smooth_spectrum = None
-        stellar_attenuated = None
         stellar_unattenuated = None
         smooth_wavelengths_um = None
         
-        if ssp_model is not None:
+        if ssp_model is not None and self.show_components:
             try:
-                # Build wavelength grid in ANGSTROMS (model expects Å)
-                wav_smooth_aa = np.logspace(np.log10(1000.0), np.log10(30000.0), 300)  # 1000–30000 Å
+                wav_smooth_aa = np.logspace(np.log10(1000.0), np.log10(30000.0), 300)
                 params = results['parameters']
                 smooth_spectrum = ssp_model.get_magnitudes(
-                    mass=params.get('mass', 4.5),
-                    age=params.get('age', 0.5),
-                    metallicity=params.get('metallicity', -0.5),
-                    dust=params.get('dust', 0.0),
-                    wavelengths=wav_smooth_aa
+                    wavelengths=wav_smooth_aa, **params
                 )
-                # Convert to microns for plotting x-axis
                 smooth_wavelengths_um = wav_smooth_aa / 1e4
-
-                # Also generate unattenuated spectrum
+                
                 stellar_unattenuated = ssp_model.get_magnitudes(
                     mass=params.get('mass', 4.5),
                     age=params.get('age', 0.5),
@@ -81,117 +114,135 @@ class Plotting:
                     dust=0.0,
                     wavelengths=wav_smooth_aa
                 )
-
-                print(f"[PLOTTING] Generated smooth spectrum from {smooth_wavelengths_um.min():.3f} to {smooth_wavelengths_um.max():.3f} μm")
-                print(f"[PLOTTING] Spectrum flux range: {smooth_spectrum.min():.2e} to {smooth_spectrum.max():.2e} Jy")
             except Exception as e:
                 print(f"Could not generate smooth spectrum: {e}")
-                import traceback
-                traceback.print_exc()
         
         # Create figure
-        fig = plt.figure(figsize=(12, 8))
-        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.0)
+        if self.show_residuals:
+            fig = plt.figure(figsize=self.figure_size)
+            gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.0)
+            ax_sed = fig.add_subplot(gs[0])
+            ax_res = fig.add_subplot(gs[1], sharex=ax_sed)
+        else:
+            fig, ax_sed = plt.subplots(figsize=self.figure_size)
         
-        ax_sed = fig.add_subplot(gs[0])
-        ax_res = fig.add_subplot(gs[1], sharex=ax_sed)
+        # Title
+        ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.4f})', 
+                        fontsize=14, fontweight='bold')
         
-        # Add title with object ID and redshift
-        ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.4f})', fontsize=14, fontweight='bold')
+        # Plot components
+        if self.show_components and stellar_unattenuated is not None:
+            ax_sed.plot(smooth_wavelengths_um, stellar_unattenuated, '--', 
+                       linewidth=self.line_width, color=self.colors['unattenuated'],
+                       label='Stellar unattenuated', zorder=1, alpha=0.8)
         
-        # Plot components - smooth spectra first (background)
-        if stellar_unattenuated is not None and smooth_wavelengths_um is not None:
-            ax_sed.plot(smooth_wavelengths_um, stellar_unattenuated, '--', linewidth=1.0, 
-                       color='#F1C40F', label='Stellar unattenuated', zorder=1, alpha=0.8)
+        if smooth_spectrum is not None:
+            ax_sed.plot(smooth_wavelengths_um, smooth_spectrum, '-', 
+                       linewidth=self.line_width, color=self.colors['model'],
+                       label='Model spectrum', zorder=2, alpha=0.9)
         
-        if smooth_spectrum is not None and smooth_wavelengths_um is not None:
-            ax_sed.plot(smooth_wavelengths_um, smooth_spectrum, '-', linewidth=1.5, 
-                       color='#E74C3C', label='Model spectrum', zorder=2, alpha=0.9)
+        # Model photometry
+        ax_sed.scatter(wavelength_um, mod_flux, s=self.marker_size_model, marker='s',
+                      facecolor=self.colors['model'], edgecolors='darkred', 
+                      linewidth=1.5, label='Model photometry', zorder=5)
         
-        # Plot model photometry points
-        ax_sed.scatter(wavelength_um, mod_flux, s=120, marker='s', 
-                      facecolor='#E74C3C', edgecolors='#C0392B', linewidth=1.5,
-                      label='Model photometry', zorder=5)
-        
-        # Plot observed photometry with error bars
-        ax_sed.errorbar(wavelength_um, obs_flux, yerr=obs_err, 
-                       fmt='o', markersize=12, capsize=4, capthick=2,
-                       color='#2980B9', ecolor='#2980B9', elinewidth=2,
-                       markeredgecolor='#1A5276', markeredgewidth=1.5,
-                       label='Observed photometry', zorder=6)
+        # Observed photometry
+        if self.show_error_bars:
+            ax_sed.errorbar(wavelength_um, obs_flux, yerr=obs_err,
+                           fmt='o', markersize=self.marker_size_obs, capsize=4, capthick=2,
+                           color=self.colors['observed'], ecolor=self.colors['observed'],
+                           elinewidth=2, markeredgecolor='#1A5276', markeredgewidth=1.5,
+                           label='Observed photometry', zorder=6)
+        else:
+            ax_sed.scatter(wavelength_um, obs_flux, s=self.marker_size_obs**2,
+                          marker='o', facecolor=self.colors['observed'],
+                          edgecolors='#1A5276', linewidth=1.5,
+                          label='Observed photometry', zorder=6)
         
         ax_sed.set_xscale('log')
         ax_sed.set_yscale('log')
         ax_sed.set_ylabel(r'$F_\nu$ [Jy]', fontsize=14)
         
-        # Set axis limits
-        # Y-axis: use all fluxes to set range
+        # Axis limits
         all_flux = np.concatenate([obs_flux, mod_flux])
         if smooth_spectrum is not None:
             valid_spectrum = smooth_spectrum[smooth_spectrum > 0]
             if len(valid_spectrum) > 0:
                 all_flux = np.concatenate([all_flux, valid_spectrum])
         
-        y_min = np.min(all_flux[all_flux > 0]) * 0.3  # Less aggressive margin
+        y_min = np.min(all_flux[all_flux > 0]) * 0.3
         y_max = np.max(all_flux) * 3.0
         ax_sed.set_ylim(y_min, y_max)
         
-        # X-axis limits based on actual photometry coverage
         x_min = wavelength_um.min() * 0.8
         x_max = wavelength_um.max() * 1.3
         ax_sed.set_xlim(x_min, x_max)
         
-        ax_sed.legend(loc='upper right', frameon=True, fancybox=False, 
-                     edgecolor='gray', fontsize=10, framealpha=0.95)
-        ax_sed.grid(True, alpha=0.3, linestyle='-', linewidth=0.3, which='both')
-        ax_sed.tick_params(axis='x', which='both', labelbottom=False)
+        ax_sed.legend(loc=self.legend_location, frameon=True, fancybox=False,
+                     edgecolor='gray', fontsize=self.legend_fontsize, framealpha=0.95)
         
-        # Text box with fit parameters
-        chi2 = -2 * results['log_likelihood']
-        n_data = len(obs_flux)
-        n_params = len(results['parameters'])
-        reduced_chi2 = chi2 / (n_data - n_params) if n_data > n_params else chi2
+        if self.show_grid:
+            ax_sed.grid(True, alpha=self.grid_alpha, linestyle='-', linewidth=0.3, which='both')
         
-        textstr = f"z = {redshift:.4f}\n"
-        textstr += f"$\\chi^2_{{\\nu}}$ = {reduced_chi2:.2f}\n"
-        for param, value in results['parameters'].items():
-            if param == 'mass':
-                textstr += f"log M = {value:.2f}\n"
-            elif param == 'age':
-                textstr += f"Age = {value:.2f} Gyr\n"
-            elif param == 'metallicity':
-                textstr += f"[Z/H] = {value:.2f}\n"
-            elif param == 'dust':
-                textstr += f"E(B-V) = {value:.2f}\n"
+        if self.show_residuals:
+            ax_sed.tick_params(axis='x', which='both', labelbottom=False)
         
-        props = dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.95)
-        ax_sed.text(0.03, 0.97, textstr.strip(), transform=ax_sed.transAxes, 
-                   fontsize=10, verticalalignment='top', horizontalalignment='left', bbox=props)
+        # Parameter box
+        if self.show_parameter_box:
+            chi2 = -2 * results['log_likelihood']
+            n_data = len(obs_flux)
+            n_params = len(results['parameters'])
+            reduced_chi2 = chi2 / (n_data - n_params) if n_data > n_params else chi2
+            
+            textstr = f"z = {redshift:.4f}\n"
+            textstr += f"$\\chi^2_{{\\nu}}$ = {reduced_chi2:.2f}\n"
+            for param, value in results['parameters'].items():
+                if param == 'mass':
+                    textstr += f"log M = {value:.2f}\n"
+                elif param == 'age':
+                    textstr += f"Age = {value:.2f} Gyr\n"
+                elif param == 'metallicity':
+                    textstr += f"[Z/H] = {value:.2f}\n"
+                elif param == 'dust':
+                    textstr += f"E(B-V) = {value:.2f}\n"
+            
+            props = dict(boxstyle='round,pad=0.3', facecolor='white', 
+                        edgecolor='gray', alpha=0.95)
+            ax_sed.text(0.03, 0.97, textstr.strip(), transform=ax_sed.transAxes,
+                       fontsize=10, verticalalignment='top', horizontalalignment='left',
+                       bbox=props)
         
         # Residuals panel
-        residuals = (obs_flux - mod_flux) / obs_err
-        ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
-                      facecolor='#2980B9', edgecolors='#1A5276', linewidth=1.5, zorder=3)
-        ax_res.axhline(y=0, color='black', linestyle='-', linewidth=1.0, zorder=2)
-        ax_res.axhspan(-1, 1, alpha=0.3, color='#2ECC71', zorder=1)
-        ax_res.axhspan(-2, -1, alpha=0.15, color='#F39C12', zorder=1)
-        ax_res.axhspan(1, 2, alpha=0.15, color='#F39C12', zorder=1)
-        ax_res.axhline(y=1, color='#2ECC71', linestyle='--', linewidth=0.8, alpha=0.8)
-        ax_res.axhline(y=-1, color='#2ECC71', linestyle='--', linewidth=0.8, alpha=0.8)
+        if self.show_residuals:
+            residuals = (obs_flux - mod_flux) / obs_err
+            ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
+                          facecolor=self.colors['observed'], 
+                          edgecolors='#1A5276', linewidth=1.5, zorder=3)
+            ax_res.axhline(y=0, color='black', linestyle='-', linewidth=1.0, zorder=2)
+            ax_res.axhspan(-1, 1, alpha=0.3, color=self.colors['residual_good'], zorder=1)
+            ax_res.axhspan(-2, -1, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
+            ax_res.axhspan(1, 2, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
+            ax_res.axhline(y=1, color=self.colors['residual_good'], 
+                          linestyle='--', linewidth=0.8, alpha=0.8)
+            ax_res.axhline(y=-1, color=self.colors['residual_good'],
+                          linestyle='--', linewidth=0.8, alpha=0.8)
+            
+            ax_res.set_xlabel(r'$\lambda_{\rm obs}$ [$\mu$m]', fontsize=14)
+            ax_res.set_ylabel(r'$\chi$', fontsize=14)
+            res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
+            ax_res.set_ylim(-res_max, res_max)
+            ax_res.set_xlim(x_min, x_max)
+            
+            if self.show_grid:
+                ax_res.grid(True, alpha=self.grid_alpha, linestyle='-', linewidth=0.3)
+            
+            plt.setp(ax_sed.get_xticklabels(), visible=False)
+            fig.subplots_adjust(hspace=0)
         
-        ax_res.set_xlabel(r'$\lambda_{\rm obs}$ [$\mu$m]', fontsize=14)
-        ax_res.set_ylabel(r'$\chi$', fontsize=14)
-        res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
-        ax_res.set_ylim(-res_max, res_max)
-        ax_res.set_xlim(wave_min, wave_max)
-        ax_res.grid(True, alpha=0.3, linestyle='-', linewidth=0.3)
-        plt.setp(ax_sed.get_xticklabels(), visible=False)
-        fig.subplots_adjust(hspace=0)
-        
-        # Save with object ID in filename
+        # Save
         for fmt in self.formats:
             filepath = os.path.join(self.output_dir, f'sed_fit_{object_id}.{fmt}')
-            fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
+            fig.savefig(filepath, dpi=self.dpi, bbox_inches='tight', facecolor='white')
             print(f"Saved: {filepath}")
         
         plt.close(fig)

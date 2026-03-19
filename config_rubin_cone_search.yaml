@@ -1,0 +1,46 @@
+# ═══════════════════════════════════════════════════════════════════════
+# SPECTRA: Rubin Cone Search (Multiple Objects in Region)
+# ═══════════════════════════════════════════════════════════════════════
+# Query all objects within a circular region and fit them all
+# ═══════════════════════════════════════════════════════════════════════
+
+input:
+  type: rubin_cone_search
+  ra: 150.1234              # Center RA (degrees)
+  dec: 2.3456               # Center Dec (degrees)
+  radius_arcsec: 60.0       # Search radius (1 arcmin)
+  max_objects: 20           # Optional: limit number of matches
+
+rubin:
+  rsp_token: YOUR_RSP_TOKEN_HERE
+  flux_type: psfFlux
+  bands: [u, g, r, i, z, y]
+  
+  # Optional filters
+  filters:
+    mag_r_min: 18.0         # Minimum r-band magnitude
+    mag_r_max: 24.0         # Maximum r-band magnitude
+    snr_min: 5.0            # Minimum SNR in detection band
+
+ssp_model:
+  type: fsps
+  imf: chabrier
+  dust_type: 2
+
+fitting:
+  method: ml
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass:         [8.0,  13.0]
+    age:          [0.001, 13.5]
+    metallicity:  [-2.5,  0.5]
+    dust:         [0.0,   3.0]
+
+plotting:
+  output_dir: "outputs/rubin_cone_ra150_dec2"
+  save_plots: true
+  dpi: 150
+
+output:
+  save_photometry: true
