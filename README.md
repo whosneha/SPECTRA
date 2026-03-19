@@ -59,7 +59,7 @@ SPECTRA/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/SPECTRA.git
+git clone https://github.com/whosneha/SPECTRA.git
 cd SPECTRA
 ```
 
