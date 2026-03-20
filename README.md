@@ -33,7 +33,7 @@ cd SPECTRA
 export PATH="$PWD/bin:$PATH"
 
 # 3. Run example (PHANGS-HST cluster, fast ML fit)
-spectra --config config_phangs.yaml --max-rows 1 --method ml
+spectra --config example_configs/config_phangs.yaml --max-rows 1 --method ml
 
 # Output: results in outputs/phangs_ic5332_top10_fsps/
 ```
@@ -69,6 +69,18 @@ SPECTRA/
 │   ├── test_data_loaders.py
 │   └── test_integration.py
 │
+├── example_configs/              # Example YAML configuration files
+│   ├── config_phangs.yaml       # PHANGS-HST star clusters
+│   ├── config_rubin.yaml        # Rubin single object
+│   ├── config_rubin_batch.yaml  # Rubin batch processing
+│   ├── config_rubin_cone_search.yaml
+│   ├── config_rubin_galex.yaml  # Rubin + GALEX multi-wavelength
+│   ├── config_rubin_from_csv.yaml
+│   ├── config_single_fits.yaml  # Single FITS file
+│   ├── config_custom_plotting.yaml
+│   ├── config_minimal_plotting.yaml
+│   └── config_presentation_plotting.yaml
+│
 ├── docs/                         # Documentation
 │   ├── INSTALL.md
 │   ├── USAGE.md
@@ -82,17 +94,6 @@ SPECTRA/
 │
 ├── bin/
 │   └── spectra                  # Command-line wrapper
-│
-├── config_phangs.yaml           # PHANGS-HST config
-├── config_rubin.yaml            # Rubin single object
-├── config_rubin_batch.yaml      # Rubin batch processing
-├── config_rubin_cone_search.yaml
-├── config_rubin_galex.yaml      # Rubin + GALEX multi-wavelength
-├── config_rubin_from_csv.yaml   # Rubin from CSV list
-├── config_single_fits.yaml      # Single FITS file
-├── config_custom_plotting.yaml  # Plotting customization demo
-├── config_minimal_plotting.yaml # Minimal plot style
-├── config_presentation_plotting.yaml  # Presentation plot style
 │
 ├── setup.py
 ├── pytest.ini
@@ -123,7 +124,7 @@ Run directly without installation:
 
 ```bash
 cd SPECTRA
-python run.py config_phangs.yaml
+python run.py example_configs/config_phangs.yaml
 ```
 
 ### Option 3: Pip Install (Developers)
@@ -161,13 +162,13 @@ See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation guide.
 
 | Input Type | Description | Example Config |
 |------------|-------------|----------------|
-| **phangs_fits** | PHANGS-HST cluster catalogs | `config_phangs.yaml` |
-| **rubin_id** | Query by Rubin object ID | `config_rubin.yaml` |
-| **rubin_tap** | Query by RA/Dec coordinates | `config_rubin.yaml` |
-| **rubin_batch_ids** | List of Rubin object IDs | `config_rubin_batch.yaml` |
-| **rubin_cone_search** | Spatial cone search | `config_rubin_cone_search.yaml` |
-| **rubin_from_csv** | Rubin IDs from CSV file | `config_rubin_from_csv.yaml` |
-| **fits** | Single FITS binary table | `config_single_fits.yaml` |
+| **phangs_fits** | PHANGS-HST cluster catalogs | `example_configs/config_phangs.yaml` |
+| **rubin_id** | Query by Rubin object ID | `example_configs/config_rubin.yaml` |
+| **rubin_tap** | Query by RA/Dec coordinates | `example_configs/config_rubin.yaml` |
+| **rubin_batch_ids** | List of Rubin object IDs | `example_configs/config_rubin_batch.yaml` |
+| **rubin_cone_search** | Spatial cone search | `example_configs/config_rubin_cone_search.yaml` |
+| **rubin_from_csv** | Rubin IDs from CSV file | `example_configs/config_rubin_from_csv.yaml` |
+| **fits** | Single FITS binary table | `example_configs/config_single_fits.yaml` |
 | **fits_batch** | Directory of FITS files | -- |
 | **csv** | Generic CSV photometry | -- |
 | **dat** | ASCII whitespace-delimited | -- |
@@ -182,7 +183,7 @@ See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation guide.
 ### Example 1: PHANGS-HST Star Clusters
 
 ```bash
-spectra --config config_phangs.yaml --method mcmc --max-rows 10
+spectra --config example_configs/config_phangs.yaml --method mcmc --max-rows 10
 ```
 
 **Config**:
@@ -219,7 +220,7 @@ rubin:
 ### Example 3: Batch Rubin Objects
 
 ```bash
-spectra --config config_rubin_batch.yaml --method ml
+spectra --config example_configs/config_rubin_batch.yaml --method ml
 ```
 
 **Config**:
@@ -239,7 +240,7 @@ input:
 Combine Rubin optical with external UV/IR data:
 
 ```bash
-spectra --config config_rubin_galex.yaml
+spectra --config example_configs/config_rubin_galex.yaml
 ```
 
 **Config**:
@@ -367,7 +368,7 @@ outputs/rubin_multiband_batch/
 Find and fit all objects within a region:
 
 ```bash
-spectra --config config_rubin_cone_search.yaml
+spectra --config example_configs/config_rubin_cone_search.yaml
 ```
 
 **Config**:
@@ -385,7 +386,7 @@ input:
 ### Example 7: Rubin Objects from CSV List
 
 ```bash
-spectra --config config_rubin_from_csv.yaml
+spectra --config example_configs/config_rubin_from_csv.yaml
 ```
 
 **Config**:
@@ -410,7 +411,7 @@ object_id,redshift,comment
 ### Example 8: Custom FITS/CSV Catalog
 
 ```bash
-spectra --config config_single_fits.yaml
+spectra --config example_configs/config_single_fits.yaml
 ```
 
 See **[docs/USAGE.md](docs/USAGE.md)** for all examples.
@@ -419,7 +420,7 @@ See **[docs/USAGE.md](docs/USAGE.md)** for all examples.
 
 ## Configuration
 
-SPECTRA uses YAML config files. All example configs included:
+SPECTRA uses YAML config files. All examples are in the `example_configs/` directory:
 
 | Config File | Purpose |
 |------------|---------|
@@ -433,6 +434,13 @@ SPECTRA uses YAML config files. All example configs included:
 | `config_custom_plotting.yaml` | Plot customization |
 | `config_minimal_plotting.yaml` | Minimal plot style |
 | `config_presentation_plotting.yaml` | Presentation style |
+
+Copy and customize for your project:
+```bash
+cp example_configs/config_rubin.yaml my_project.yaml
+# Edit my_project.yaml with your settings
+spectra --config my_project.yaml
+```
 
 ### Minimal Config
 
@@ -536,21 +544,21 @@ SPECTRA supports full plot customization via config. All options are optional wi
 ```yaml
 plotting:
   output_dir: "outputs/my_run"
-  formats: [png, pdf]           # Multiple output formats
-  dpi: 300                      # Resolution
-  plot_style: publication       # Options: default, minimal, publication
-  figure_size: [14, 10]         # Width, height in inches
+  formats: [png, pdf]
+  dpi: 300
+  plot_style: publication
+  figure_size: [14, 10]
 
-  show_components: true         # Show unattenuated stellar spectrum
-  show_error_bars: true         # Show error bars on observed data
-  show_residuals: true          # Show residual panel
-  show_parameter_box: true      # Show best-fit parameter text box
-  show_grid: true               # Show grid lines
+  show_components: true
+  show_error_bars: true
+  show_residuals: true
+  show_parameter_box: true
+  show_grid: true
 
   color_scheme:
-    observed: "#3498DB"         # Observed photometry color
-    model: "#E74C3C"            # Model color
-    unattenuated: "#F39C12"     # Unattenuated spectrum color
+    observed: "#3498DB"
+    model: "#E74C3C"
+    unattenuated: "#F39C12"
 
   marker_size_obs: 14
   marker_size_model: 150
@@ -559,7 +567,7 @@ plotting:
   legend_fontsize: 11
 ```
 
-See `config_custom_plotting.yaml`, `config_minimal_plotting.yaml`, and `config_presentation_plotting.yaml` for full examples.
+See `example_configs/config_custom_plotting.yaml`, `example_configs/config_minimal_plotting.yaml`, and `example_configs/config_presentation_plotting.yaml` for full examples.
 
 ---
 

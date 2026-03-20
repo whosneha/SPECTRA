@@ -163,30 +163,35 @@ For detailed documentation: https://github.com/yourusername/SPECTRA
 def list_example_configs():
     """List available example configuration files."""
     repo_root = Path(__file__).parent.parent
-    config_dir = repo_root
+    config_dir = repo_root / "example_configs"
     
     print("\n" + "="*70)
     print("AVAILABLE EXAMPLE CONFIGS")
     print("="*70)
+    print(f"\nConfig directory: {config_dir}\n")
     
     examples = [
-        ("config_rubin.yaml", "Rubin/LSST TAP queries (single object or cone search)"),
         ("config_phangs.yaml", "PHANGS-HST star cluster catalogs (FITS tables)"),
-        ("config_fornax.yaml", "Fornax GC photometry (CSV format)"),
-        ("config.yaml", "Generic multi-source photometry"),
+        ("config_rubin.yaml", "Rubin/LSST TAP queries (single object)"),
+        ("config_rubin_batch.yaml", "Batch Rubin object IDs"),
+        ("config_rubin_cone_search.yaml", "Rubin spatial cone search"),
+        ("config_rubin_galex.yaml", "Rubin + GALEX multi-wavelength"),
+        ("config_rubin_from_csv.yaml", "Rubin IDs from CSV file"),
+        ("config_single_fits.yaml", "Single FITS binary table"),
+        ("config_custom_plotting.yaml", "Plot customization demo"),
+        ("config_minimal_plotting.yaml", "Minimal plot style"),
+        ("config_presentation_plotting.yaml", "Presentation plot style"),
     ]
     
     for filename, description in examples:
         filepath = config_dir / filename
-        status = "✓" if filepath.exists() else "✗"
-        print(f"\n{status} {filename}")
-        print(f"   {description}")
-        if filepath.exists():
-            print(f"   Path: {filepath}")
+        status = "[found]" if filepath.exists() else "[missing]"
+        print(f"  {status} {filename}")
+        print(f"          {description}")
     
     print("\n" + "="*70)
     print("Copy and modify an example config for your use case:")
-    print("  cp config_rubin.yaml my_project.yaml")
+    print("  cp example_configs/config_rubin.yaml my_project.yaml")
     print("  spectra --config my_project.yaml")
     print("="*70 + "\n")
 

@@ -670,7 +670,7 @@ def save_summary(all_results, output_dir, config):
 def main(config_path: str | None = None) -> None:
     # Load configuration
     if config_path is None:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'example_configs', 'config_phangs.yaml')
     if not os.path.exists(config_path):
         print(f"Configuration file not found at {config_path}")
         return
