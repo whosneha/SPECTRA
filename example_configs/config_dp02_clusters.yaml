@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA — DP0.2 compact sources (cluster-like) in DC2 field
+#
+# IMPORTANT: You need a Rubin RSP token (NOT a GitHub token).
+# Get one at: https://data.lsst.cloud/ → username → Token Manager
+#
+# Run:
+#   export RSP_TOKEN="your_RSP_token_here"   # NOT a ghp_... GitHub token
+#   python run.py example_configs/config_dp02_clusters.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: rubin_cone_search
+  ra: 62.0
+  dec: -37.0
+  radius_arcsec: 60.0
+  max_objects: 5
+
+rubin:
+  rsp_token: null       # reads from RSP_TOKEN env variable
+  flux_type: psfFlux
+  bands: [u, g, r, i, z, y]
+
+ssp_model:
+  type: fsps
+  redshift: 0.0
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+
+fitting:
+  method: mcmc
+  error_floor: 0.05
+  parameters:
+    - mass
+    - age
+    - metallicity
+  priors:
+    mass:         [6.0, 12.0]
+    age:          [0.01, 13.5]
+    metallicity:  [-2.0, 0.5]
+
+plotting:
+  output_dir: "outputs/dp02_clusters"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

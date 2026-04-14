@@ -43,6 +43,8 @@ class DataLoader:
             phot_data = self._load_fits(**kwargs)
         elif input_type == 'file' or input_type == 'csv':
             phot_data = self._load_file(**kwargs)
+        elif input_type == 'dat':
+            phot_data = self._load_dat(**kwargs)
         else:
             raise ValueError(f"Unknown input type: {input_type}")
         
@@ -393,3 +395,238 @@ class DataLoader:
             'sources': sources,
             'n_datasets': len(datasets)
         }
+    
+    def _load_dat(self, filepath):
+        """
+        Load whitespace-delimited .dat file.
+
+        Supports two wavelength formats:
+          - Microns (values < 100) -- converted to Angstroms
+          - Angstroms (values >= 100) -- used as-is
+
+        Expected columns: wavelength  obs_flux  obs_err  [mod_flux]
+        Lines starting with '#' are treated as comments.
+        """
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError(f"DAT file not found: {filepath}")
+
+        data = np.loadtxt(filepath, comments='#')
+
+        if data.ndim == 1:
+            raise ValueError(f"DAT file has only 1 row: {filepath}")
+
+        wavelength = data[:, 0]
+        obs_flux = data[:, 1]
+        obs_err = data[:, 2]
+
+        # Auto-detect wavelength units: if max < 100, assume microns
+        if wavelength.max() < 100.0:
+            print(f"[DATA LOADER] Wavelengths appear to be in microns (max={wavelength.max():.4f})")
+            print(f"[DATA LOADER] Converting to Angstroms (* 1e4)")
+            wavelength = wavelength * 1e4  # microns -> Angstroms
+
+        # Optional 4th column: model flux from file (for reference only)
+        mod_flux_file = data[:, 3] if data.shape[1] >= 4 else None
+
+        # Filter out rows with non-positive flux or non-finite errors
+        valid = (obs_flux > 0) & np.isfinite(obs_flux) & np.isfinite(obs_err) & (obs_err > 0)
+        
+        # Also filter out very low SNR points (SNR < 1 = noise-dominated)
+        snr = np.where(valid, obs_flux / obs_err, 0.0)
+        min_snr = 1.0
+        low_snr = valid & (snr < min_snr)
+        if np.any(low_snr):
+            n_low = np.sum(low_snr)
+            print(f"[DATA LOADER] Filtering {n_low} low-SNR points (SNR < {min_snr})")
+            for idx in np.where(low_snr)[0]:
+                print(f"  Row {idx}: flux={obs_flux[idx]:.3e}, err={obs_err[idx]:.3e}, SNR={snr[idx]:.2f}")
+            valid = valid & (snr >= min_snr)
+        
+        if not np.all(valid):
+            n_bad = np.sum(~valid)
+            print(f"[DATA LOADER] Total filtered: {n_bad} of {len(obs_flux)} rows")
+            wavelength = wavelength[valid]
+            obs_flux = obs_flux[valid]
+            obs_err = obs_err[valid]
+            if mod_flux_file is not None:
+                mod_flux_file = mod_flux_file[valid]
+
+        # Generate band names from wavelength
+        bands = [f"{w:.0f}A" for w in wavelength]
+
+        print(f"[DATA LOADER] Loaded {len(wavelength)} data points from {os.path.basename(filepath)}")
+        print(f"[DATA LOADER] Wavelength range: {wavelength.min():.1f} - {wavelength.max():.1f} Angstroms")
+        print(f"[DATA LOADER] Flux range: {obs_flux.min():.3e} - {obs_flux.max():.3e}")
+        if len(obs_flux) > 0:
+            snr_kept = obs_flux / obs_err
+            print(f"[DATA LOADER] SNR range: {snr_kept.min():.1f} - {snr_kept.max():.1f}")
+
+        result = {
+            'wavelength': wavelength,
+            'obs_flux': obs_flux,
+            'obs_err': obs_err,
+            'bands': bands,
+        }
+
+        if mod_flux_file is not None:
+            result['mod_flux_file'] = mod_flux_file
+
+        return result
+
+    def _load_csv(self, filepath):
+        """Load CSV photometry file."""
+        import pandas as pd
+
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError(f"CSV file not found: {filepath}")
+
+        df = pd.read_csv(filepath)
+
+        # Try standard column names
+        wav_col = None
+        for candidate in ['wavelength', 'wave', 'lambda', 'wav']:
+            if candidate in df.columns:
+                wav_col = candidate
+                break
+        if wav_col is None:
+            raise ValueError(f"No wavelength column found in {filepath}. "
+                             f"Expected one of: wavelength, wave, lambda, wav")
+
+        flux_col = None
+        for candidate in ['flux', 'obs_flux', 'f_nu']:
+            if candidate in df.columns:
+                flux_col = candidate
+                break
+        if flux_col is None:
+            raise ValueError(f"No flux column found in {filepath}.")
+
+        err_col = None
+        for candidate in ['flux_err', 'obs_err', 'error', 'err', 'f_nu_err']:
+            if candidate in df.columns:
+                err_col = candidate
+                break
+        if err_col is None:
+            raise ValueError(f"No error column found in {filepath}.")
+
+        wavelength = df[wav_col].values.astype(float)
+        obs_flux = df[flux_col].values.astype(float)
+        obs_err = df[err_col].values.astype(float)
+
+        # Auto-detect wavelength units
+        if wavelength.max() < 100.0:
+            wavelength = wavelength * 1e4
+
+        bands = df['band'].tolist() if 'band' in df.columns else [f"{w:.0f}A" for w in wavelength]
+
+        valid = (obs_flux > 0) & np.isfinite(obs_flux) & np.isfinite(obs_err) & (obs_err > 0)
+        wavelength = wavelength[valid]
+        obs_flux = obs_flux[valid]
+        obs_err = obs_err[valid]
+        bands = [b for b, v in zip(bands, valid) if v]
+
+        print(f"[DATA LOADER] Loaded {len(wavelength)} bands from CSV: {os.path.basename(filepath)}")
+
+        return {
+            'wavelength': wavelength,
+            'obs_flux': obs_flux,
+            'obs_err': obs_err,
+            'bands': bands,
+        }
+
+    def _load_fits(self, filepath, row_index=0):
+        """Load FITS binary table."""
+        from astropy.io import fits as pyfits
+
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError(f"FITS file not found: {filepath}")
+
+        with pyfits.open(filepath) as hdul:
+            table = hdul[1].data
+            row = table[row_index]
+
+            # Try to find wavelength/flux columns
+            col_names = [c.lower() for c in table.names]
+
+            result = {
+                'object_id': row_index,
+                'wavelength': np.array([]),
+                'obs_flux': np.array([]),
+                'obs_err': np.array([]),
+                'bands': [],
+            }
+
+            # Generic approach: look for wavelength, flux, error columns
+            for wav_name in ['wavelength', 'wave', 'lambda']:
+                if wav_name in col_names:
+                    idx = col_names.index(wav_name)
+                    result['wavelength'] = np.array(table.names[idx])
+                    break
+
+        print(f"[DATA LOADER] Loaded FITS row {row_index} from {os.path.basename(filepath)}")
+        return result
+
+    def _load_rubin(self, input_type, **kwargs):
+        """Load Rubin data via TAP query."""
+        from src.data.rubin_query import RubinDataQuery
+
+        token = kwargs.get('token')
+        rubin = RubinDataQuery(token=token)
+
+        if input_type == 'rubin_id':
+            object_id = kwargs.get('object_id')
+            df = rubin.query_object(object_id)
+        elif input_type == 'rubin_tap':
+            ra = kwargs.get('ra')
+            dec = kwargs.get('dec')
+            radius = kwargs.get('radius_arcsec', 10.0)
+            df = rubin.query_region(ra, dec, radius)
+        else:
+            raise ValueError(f"Unknown Rubin input type: {input_type}")
+
+        return rubin.extract_photometry(
+            df,
+            flux_type=kwargs.get('flux_type', 'psfFlux'),
+            bands=kwargs.get('bands')
+        )
+
+    def combine_datasets(self, datasets):
+        """
+        Combine multiple photometry datasets into one.
+
+        Args:
+            datasets: List of phot_data dicts
+
+        Returns:
+            Combined phot_data dict sorted by wavelength
+        """
+        all_wav = []
+        all_flux = []
+        all_err = []
+        all_bands = []
+
+        for ds in datasets:
+            all_wav.extend(ds['wavelength'])
+            all_flux.extend(ds['obs_flux'])
+            all_err.extend(ds['obs_err'])
+            if 'bands' in ds:
+                all_bands.extend(ds['bands'])
+            else:
+                all_bands.extend([f"{w:.0f}A" for w in ds['wavelength']])
+
+        # Sort by wavelength
+        sort_idx = np.argsort(all_wav)
+
+        combined = {
+            'wavelength': np.array(all_wav)[sort_idx],
+            'obs_flux': np.array(all_flux)[sort_idx],
+            'obs_err': np.array(all_err)[sort_idx],
+            'bands': [all_bands[i] for i in sort_idx],
+        }
+
+        # Carry over metadata from first dataset
+        for key in ['redshift', 'ra', 'dec', 'object_id']:
+            if key in datasets[0]:
+                combined[key] = datasets[0][key]
+
+        print(f"[DATA LOADER] Combined {len(datasets)} datasets -> {len(combined['wavelength'])} bands")
+        return combined

@@ -201,33 +201,91 @@ class RubinDataQuery:
         Returns:
             List of (object_id, phot_data) tuples
         """
+        if self.tap_service is None:
+            raise RuntimeError("TAP service not initialized. Provide a valid token.")
+        
         bands = bands or ['u', 'g', 'r', 'i', 'z', 'y']
         radius_deg = radius_arcsec / 3600.0
         
-        # TAP query for cone search
+        # Build column list
+        flux_cols = ', '.join([f'{band}_{flux_type}, {band}_{flux_type}Err' for band in bands])
+        
+        top_clause = f"TOP {max_objects}" if max_objects else ""
+        
         query = f"""
-        SELECT objectId, coord_ra, coord_dec,
-               {', '.join([f'{band}_{flux_type}' for band in bands])},
-               {', '.join([f'{band}_{flux_type}Err' for band in bands])}
+        SELECT {top_clause}
+            objectId, coord_ra, coord_dec,
+            {flux_cols}
         FROM dp02_dc2_catalogs.Object
         WHERE CONTAINS(POINT('ICRS', coord_ra, coord_dec),
                       CIRCLE('ICRS', {ra}, {dec}, {radius_deg})) = 1
         """
         
-        if max_objects:
-            query += f" LIMIT {max_objects}"
+        # Add filter for positive flux in at least one band (r-band)
+        query += f"\n  AND r_{flux_type} > 0"
         
         print(f"[RUBIN] Executing cone search query...")
-        results = self._execute_tap_query(query)
+        
+        try:
+            result = self.tap_service.run_sync(query)
+            df = result.to_table().to_pandas()
+        except Exception as e:
+            raise RuntimeError(f"TAP cone search query failed: {e}")
+        
+        if df.empty:
+            print(f"[RUBIN] No objects found in search region")
+            return []
+        
+        print(f"[RUBIN] Found {len(df)} objects, extracting photometry...")
         
         datasets = []
-        for row in results:
-            obj_id = row['objectId']
+        for idx, row in df.iterrows():
+            obj_id = int(row['objectId'])
             
-            phot_data = self._extract_photometry(row, flux_type, bands)
-            phot_data['object_id'] = f"rubin_{obj_id}"
-            phot_data['ra'] = row['coord_ra']
-            phot_data['dec'] = row['coord_dec']
+            wavelengths = []
+            fluxes = []
+            flux_errs = []
+            used_bands = []
+            
+            for band in bands:
+                flux_col = f"{band}_{flux_type}"
+                err_col = f"{band}_{flux_type}Err"
+                
+                if flux_col not in row.index:
+                    continue
+                
+                flux_njy = row[flux_col]
+                err_njy = row[err_col] if err_col in row.index else np.nan
+                
+                if not np.isfinite(flux_njy) or flux_njy <= 0:
+                    continue
+                
+                if not np.isfinite(err_njy) or err_njy <= 0:
+                    err_njy = 0.05 * flux_njy
+                
+                # nJy -> Jy
+                wavelengths.append(self.FILTER_WAVELENGTHS[band] * 1e4)  # μm -> Å
+                fluxes.append(flux_njy * 1e-9)
+                flux_errs.append(err_njy * 1e-9)
+                used_bands.append(band)
+            
+            if len(used_bands) < 3:
+                print(f"  [SKIP] objectId {obj_id}: only {len(used_bands)} valid bands")
+                continue
+            
+            phot_data = {
+                'wavelength': np.array(wavelengths),
+                'obs_flux': np.array(fluxes),
+                'obs_err': np.array(flux_errs),
+                'bands': used_bands,
+                'object_id': f"rubin_{obj_id}",
+                'ra': float(row['coord_ra']),
+                'dec': float(row['coord_dec']),
+            }
+            
+            snr = np.array(fluxes) / np.array(flux_errs)
+            print(f"  [OK] objectId {obj_id}: {len(used_bands)} bands, "
+                  f"SNR {snr.min():.0f}-{snr.max():.0f}")
             
             datasets.append((f"rubin_{obj_id}", phot_data))
         

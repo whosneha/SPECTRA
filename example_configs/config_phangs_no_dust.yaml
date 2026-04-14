@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — PHANGS-HST IC 5332, 3-parameter fit (no dust)
+# Run with:  spectra --config example_configs/config_phangs_no_dust.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: phangs_fits
+  filepath: "/Users/snehanair/Downloads/catalogs 2/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits"
+  max_rows: 10
+  min_valid_bands: 3
+  error_floor_frac: 0.10
+
+ssp_model:
+  type: fsps
+  redshift: 0.00184
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+  smooth_velocity: false
+
+fitting:
+  method: mcmc
+  error_floor: 0.10
+
+  parameters:
+    - mass
+    - age
+    - metallicity
+
+  priors:
+    mass:         [2.0,  7.0]
+    age:          [0.001, 1.0]
+    metallicity:  [-1.5,  0.3]
+
+mcmc:
+  n_walkers:  100
+  n_steps:    5000
+  burn_in:    500
+  thin:       10
+
+plotting:
+  output_dir: "outputs/phangs_ic5332_no_dust"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

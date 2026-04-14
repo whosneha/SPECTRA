@@ -93,27 +93,63 @@ class Plotting:
         
         wavelength_um = wavelength / 1e4
         
-        # Generate smooth spectrum
+        # Detect narrow-range spectroscopic data vs broadband photometry
+        wav_ratio = wavelength_um.max() / wavelength_um.min()
+        is_narrow = wav_ratio < 1.5  # less than 0.18 dex span
+        n_points = len(wavelength_um)
+        
+        if is_narrow:
+            print(f"[PLOT] Narrow wavelength range detected (ratio={wav_ratio:.3f}), using linear x-axis")
+        
+        # Determine plot x-range
+        if is_narrow:
+            # Linear padding for narrow range
+            wav_span = wavelength_um.max() - wavelength_um.min()
+            pad = max(wav_span * 0.3, 0.005)  # at least 0.005 μm padding
+            x_min = wavelength_um.min() - pad
+            x_max = wavelength_um.max() + pad
+        else:
+            # Log-space padding for broadband
+            log_wav_min = np.log10(wavelength_um.min())
+            log_wav_max = np.log10(wavelength_um.max())
+            log_wav_range = max(log_wav_max - log_wav_min, 0.3)
+            pad = max(0.3, 0.4 * log_wav_range)
+            x_min = 10 ** (log_wav_min - pad)
+            x_max = 10 ** (log_wav_max + pad)
+        
+        # Generate smooth spectrum over the PLOT range for context
         smooth_spectrum = None
         stellar_unattenuated = None
         smooth_wavelengths_um = None
         
         if ssp_model is not None and self.show_components:
             try:
-                wav_smooth_aa = np.logspace(np.log10(1000.0), np.log10(30000.0), 300)
+                if is_narrow:
+                    wav_smooth_aa = np.linspace(x_min * 1e4, x_max * 1e4, 200)
+                else:
+                    wav_smooth_aa = np.logspace(
+                        np.log10(x_min * 1e4),
+                        np.log10(x_max * 1e4),
+                        500
+                    )
+                
                 params = results['parameters']
                 smooth_spectrum = ssp_model.get_magnitudes(
                     wavelengths=wav_smooth_aa, **params
                 )
                 smooth_wavelengths_um = wav_smooth_aa / 1e4
                 
-                stellar_unattenuated = ssp_model.get_magnitudes(
-                    mass=params.get('mass', 4.5),
-                    age=params.get('age', 0.5),
-                    metallicity=params.get('metallicity', -0.5),
-                    dust=0.0,
-                    wavelengths=wav_smooth_aa
-                )
+                # Build unattenuated params (only if dust is significant)
+                dust_val = params.get('dust', 0.0)
+                if dust_val > 0.01:
+                    params_no_dust = {k: v for k, v in params.items()}
+                    params_no_dust['dust'] = 0.0
+                    stellar_unattenuated = ssp_model.get_magnitudes(
+                        wavelengths=wav_smooth_aa, **params_no_dust
+                    )
+                else:
+                    stellar_unattenuated = None
+                    
             except Exception as e:
                 print(f"Could not generate smooth spectrum: {e}")
         
@@ -141,42 +177,62 @@ class Plotting:
                        linewidth=self.line_width, color=self.colors['model'],
                        label='Model spectrum', zorder=2, alpha=0.9)
         
+        # Adjust marker sizes for many-point data
+        if n_points > 8:
+            obs_ms = max(5, self.marker_size_obs - 4)
+            mod_ms = max(40, self.marker_size_model // 3)
+        else:
+            obs_ms = self.marker_size_obs
+            mod_ms = self.marker_size_model
+        
         # Model photometry
-        ax_sed.scatter(wavelength_um, mod_flux, s=self.marker_size_model, marker='s',
+        ax_sed.scatter(wavelength_um, mod_flux, s=mod_ms, marker='s',
                       facecolor=self.colors['model'], edgecolors='darkred', 
-                      linewidth=1.5, label='Model photometry', zorder=5)
+                      linewidth=1.0, label='Model photometry', zorder=5)
         
         # Observed photometry
         if self.show_error_bars:
             ax_sed.errorbar(wavelength_um, obs_flux, yerr=obs_err,
-                           fmt='o', markersize=self.marker_size_obs, capsize=4, capthick=2,
+                           fmt='o', markersize=obs_ms, capsize=3, capthick=1.5,
                            color=self.colors['observed'], ecolor=self.colors['observed'],
-                           elinewidth=2, markeredgecolor='#1A5276', markeredgewidth=1.5,
+                           elinewidth=1.5, markeredgecolor='#1A5276', markeredgewidth=1.0,
                            label='Observed photometry', zorder=6)
         else:
-            ax_sed.scatter(wavelength_um, obs_flux, s=self.marker_size_obs**2,
+            ax_sed.scatter(wavelength_um, obs_flux, s=obs_ms**2,
                           marker='o', facecolor=self.colors['observed'],
                           edgecolors='#1A5276', linewidth=1.5,
                           label='Observed photometry', zorder=6)
         
-        ax_sed.set_xscale('log')
+        # Set axis scales based on data type
+        if is_narrow:
+            ax_sed.set_xscale('linear')
+        else:
+            ax_sed.set_xscale('log')
         ax_sed.set_yscale('log')
         ax_sed.set_ylabel(r'$F_\nu$ [Jy]', fontsize=14)
         
-        # Axis limits
-        all_flux = np.concatenate([obs_flux, mod_flux])
-        if smooth_spectrum is not None:
-            valid_spectrum = smooth_spectrum[smooth_spectrum > 0]
-            if len(valid_spectrum) > 0:
-                all_flux = np.concatenate([all_flux, valid_spectrum])
-        
-        y_min = np.min(all_flux[all_flux > 0]) * 0.3
-        y_max = np.max(all_flux) * 3.0
-        ax_sed.set_ylim(y_min, y_max)
-        
-        x_min = wavelength_um.min() * 0.8
-        x_max = wavelength_um.max() * 1.3
+        # Apply x-limits
         ax_sed.set_xlim(x_min, x_max)
+        
+        # Y limits: based on data AND visible smooth model
+        all_flux = np.concatenate([obs_flux, mod_flux])
+        if smooth_spectrum is not None and smooth_wavelengths_um is not None:
+            in_range = (smooth_wavelengths_um >= x_min) & (smooth_wavelengths_um <= x_max)
+            valid_smooth = smooth_spectrum[in_range]
+            valid_smooth = valid_smooth[(valid_smooth > 0) & np.isfinite(valid_smooth)]
+            if len(valid_smooth) > 0:
+                all_flux = np.concatenate([all_flux, valid_smooth])
+        if stellar_unattenuated is not None and smooth_wavelengths_um is not None:
+            in_range = (smooth_wavelengths_um >= x_min) & (smooth_wavelengths_um <= x_max)
+            valid_unatt = stellar_unattenuated[in_range]
+            valid_unatt = valid_unatt[(valid_unatt > 0) & np.isfinite(valid_unatt)]
+            if len(valid_unatt) > 0:
+                all_flux = np.concatenate([all_flux, valid_unatt])
+        
+        all_flux = all_flux[all_flux > 0]
+        y_min = np.min(all_flux) * 0.3
+        y_max = np.max(all_flux) * 5.0
+        ax_sed.set_ylim(y_min, y_max)
         
         ax_sed.legend(loc=self.legend_location, frameon=True, fancybox=False,
                      edgecolor='gray', fontsize=self.legend_fontsize, framealpha=0.95)
@@ -189,10 +245,13 @@ class Plotting:
         
         # Parameter box
         if self.show_parameter_box:
-            chi2 = -2 * results['log_likelihood']
-            n_data = len(obs_flux)
-            n_params = len(results['parameters'])
-            reduced_chi2 = chi2 / (n_data - n_params) if n_data > n_params else chi2
+            if 'chi2_red' in results:
+                reduced_chi2 = results['chi2_red']
+            else:
+                chi2 = -2 * results['log_likelihood']
+                n_data = len(obs_flux)
+                n_params = len(results['parameters'])
+                reduced_chi2 = chi2 / max(n_data - n_params, 1)
             
             textstr = f"z = {redshift:.4f}\n"
             textstr += f"$\\chi^2_{{\\nu}}$ = {reduced_chi2:.2f}\n"
@@ -215,9 +274,17 @@ class Plotting:
         # Residuals panel
         if self.show_residuals:
             residuals = (obs_flux - mod_flux) / obs_err
-            ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
-                          facecolor=self.colors['observed'], 
-                          edgecolors='#1A5276', linewidth=1.5, zorder=3)
+            
+            if is_narrow and n_points > 5:
+                # Connected line for dense narrow-range data
+                sort_idx = np.argsort(wavelength_um)
+                ax_res.plot(wavelength_um[sort_idx], residuals[sort_idx], '-o', 
+                           markersize=4, color=self.colors['observed'], linewidth=0.8, zorder=3)
+            else:
+                ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
+                              facecolor=self.colors['observed'], 
+                              edgecolors='#1A5276', linewidth=1.5, zorder=3)
+            
             ax_res.axhline(y=0, color='black', linestyle='-', linewidth=1.0, zorder=2)
             ax_res.axhspan(-1, 1, alpha=0.3, color=self.colors['residual_good'], zorder=1)
             ax_res.axhspan(-2, -1, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
@@ -232,6 +299,9 @@ class Plotting:
             res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
             ax_res.set_ylim(-res_max, res_max)
             ax_res.set_xlim(x_min, x_max)
+            
+            if is_narrow:
+                ax_res.set_xscale('linear')
             
             if self.show_grid:
                 ax_res.grid(True, alpha=self.grid_alpha, linestyle='-', linewidth=0.3)

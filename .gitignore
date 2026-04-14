@@ -1,0 +1,6 @@
+# ...existing code...
+
+# Secrets — NEVER commit these
+.env
+*.token
+*_token.txt

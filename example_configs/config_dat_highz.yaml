@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — High-z galaxy from .dat file (z=4.59)
+# 3-parameter MCMC fit: mass, age, metallicity (no dust)
+# Run with:  spectra --config example_configs/config_dat_highz.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: dat
+  filepath: "/Users/snehanair/Desktop/out/id_z4p59_ObsSpec_model.dat"
+
+ssp_model:
+  type: fsps
+  redshift: 4.59
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+
+fitting:
+  method: mcmc
+  error_floor: 0.10
+  parameters:
+    - mass
+    - age
+    - metallicity
+  priors:
+    mass:         [8.0, 13.0]
+    age:          [0.001, 2.0]
+    metallicity:  [-2.5, 0.5]
+
+mcmc:
+  n_walkers: 64
+  n_steps: 3000
+  burn_in: 500
+  thin: 10
+
+plotting:
+  output_dir: "outputs/highz_z4p59"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

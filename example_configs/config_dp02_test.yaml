@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — Rubin DP0.2 (DC2 simulation) test objects
+#
+# DP0.2 is Rubin's Data Preview using the DESC DC2 simulation.
+# These are SIMULATED galaxies with known true parameters.
+#
+# To get your RSP token:
+#   1. Go to https://data.lsst.cloud/
+#   2. Log in with your credentials
+#   3. Go to Settings → Security → Tokens → Create New Token
+#   4. Set:  export RSP_TOKEN="your_token_here"
+#
+# Run with:
+#   spectra --config example_configs/config_dp02_test.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Option A: Query by coordinates in the DC2 field ---
+# The DC2 simulation covers RA ~ 50-75°, Dec ~ -45 to -25°
+input:
+  type: rubin_cone_search
+  ra: 62.0            # Center of DC2 field
+  dec: -37.0
+  radius_arcsec: 30.0
+  max_objects: 5       # Start small for testing
+
+rubin:
+  rsp_token: null      # Set via RSP_TOKEN env variable
+  flux_type: cModelFlux
+  bands: [u, g, r, i, z, y]
+  # DP0.2 catalog name (this is the default)
+  # catalog: dp02_dc2_catalogs.Object
+
+ssp_model:
+  type: fsps
+  redshift: 0.0        # Will be overridden per-object if available
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+
+fitting:
+  method: ml           # Use ml for quick testing, mcmc for full run
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass:         [8.0, 13.0]
+    age:          [0.1, 13.5]
+    metallicity:  [-2.5, 0.5]
+    dust:         [0.0, 3.0]
+
+mcmc:
+  n_walkers: 32
+  n_steps: 1000
+  burn_in: 200
+  thin: 5
+
+plotting:
+  output_dir: "outputs/dp02_test"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true

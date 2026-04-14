@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTRA config — Bright DP0.2 galaxies for validation testing
+#
+# Queries bright galaxies (i < 20 mag) in the DC2 simulation field.
+# These have high SNR in all 6 Rubin bands, ideal for testing.
+#
+# DC2 field: RA ~ 50-75°, Dec ~ -45 to -25°
+#
+# Run with:
+#   export RSP_TOKEN="your_token"
+#   spectra --config example_configs/config_dp02_bright_galaxies.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+input:
+  type: rubin_cone_search
+  ra: 55.75
+  dec: -32.27
+  radius_arcsec: 120.0    # 2 arcmin — should find several bright galaxies
+  max_objects: 10
+
+rubin:
+  rsp_token: null
+  flux_type: cModelFlux   # Extended source flux (better for galaxies)
+  bands: [u, g, r, i, z, y]
+
+ssp_model:
+  type: fsps
+  redshift: 0.0
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+
+fitting:
+  method: ml
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass:         [8.0, 13.0]
+    age:          [0.1, 13.5]
+    metallicity:  [-2.5, 0.5]
+    dust:         [0.0, 3.0]
+
+plotting:
+  output_dir: "outputs/dp02_bright_galaxies"
+  show_plots: false
+  save_plots: true
+  plot_format: png
+  dpi: 150
+
+output:
+  save_photometry: true
