@@ -13,6 +13,7 @@ Missing / no-coverage values are set to -9999 in the catalog.
 """
 
 import numpy as np
+import os
 from astropy.io import fits
 
 # Central wavelengths in Angstroms (vacuum)
@@ -44,7 +45,8 @@ IC5332_REDSHIFT = 0.00184
 
 
 def load_phangs_fits(filepath, row_indices=None, max_rows=None,
-                     min_valid_bands=3, error_floor_frac=0.05):
+                     min_valid_bands=3, error_floor_frac=0.05,
+                     object_id_mode='row', redshift_override=None):
     """
     Load PHANGS-HST cluster photometry from a FITS binary table.
 
@@ -61,6 +63,11 @@ def load_phangs_fits(filepath, row_indices=None, max_rows=None,
         Rows with fewer valid bands are skipped.
     error_floor_frac : float
         Fractional error floor added in quadrature to each band error.
+    object_id_mode : str
+        Object ID format: 'row' (default) gives IC5332_cluster0001_row0000,
+        'legacy' gives <fits_basename>_cluster1.
+    redshift_override : float or None
+        If provided, use this redshift for all rows. If None, use IC5332_REDSHIFT.
 
     Returns
     -------
@@ -69,6 +76,12 @@ def load_phangs_fits(filepath, row_indices=None, max_rows=None,
                         object_id, redshift, ra, dec, cluster_class
     """
     datasets = []
+
+    file_base = os.path.basename(filepath).replace('.fits', '')
+    if redshift_override is None:
+        row_redshift = IC5332_REDSHIFT
+    else:
+        row_redshift = float(redshift_override)
 
     with fits.open(filepath) as hdul:
         table = hdul[1].data
@@ -102,7 +115,10 @@ def load_phangs_fits(filepath, row_indices=None, max_rows=None,
                 cluster_class = 0
 
             cc_class  = str(row["CC_CLASS"]).strip() if "CC_CLASS" in table.names else "unknown"
-            object_id = f"IC5332_cluster{cluster_id:04d}_row{row_idx:04d}"
+            if object_id_mode == 'legacy':
+                object_id = f"{file_base}_cluster{cluster_id}"
+            else:
+                object_id = f"IC5332_cluster{cluster_id:04d}_row{row_idx:04d}"
 
             # --- Extract photometry ---
             wavelengths, fluxes_jy, errs_jy, band_names = [], [], [], []
@@ -150,7 +166,7 @@ def load_phangs_fits(filepath, row_indices=None, max_rows=None,
                 "obs_flux":      np.array(fluxes_jy),     # Jy
                 "obs_err":       np.array(errs_jy),       # Jy
                 "bands":         band_names,
-                "redshift":      IC5332_REDSHIFT,         # use known galaxy redshift
+                "redshift":      row_redshift,
                 "ra":            ra,
                 "dec":           dec,
                 "cluster_class": cluster_class,

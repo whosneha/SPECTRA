@@ -1,264 +1,111 @@
-# External Photometry Sources
+# External Sources & Multi-Wavelength Workflows
 
-SPECTRA can automatically query and combine photometry from external catalogs to supplement your primary data.
+SPECTRA's primary use case is **combining Rubin optical photometry with external multi-wavelength sources** to build complete UV-to-mid-IR SEDs. Three methods are available:
 
-## Supported Sources
+## Typical Workflow: Rubin + External Sources
 
-| Source | Wavelength Coverage | Bands | Status |
-|--------|-------------------|-------|--------|
-| **GALEX** | UV (0.15-0.23 μm) | FUV, NUV | Available |
-| **AllWISE** | Mid-IR (3.4-22 μm) | W1, W2, W3, W4 | Available |
-| **VISTA** | NIR (0.88-2.15 μm) | Z, Y, J, H, Ks | Available |
-| **Euclid** | Optical-NIR (0.7-1.65 μm) | VIS, Y, J, H | Coming soon |
-| **Roman** | NIR (0.62-2.13 μm) | 8 bands | Future |
+The most common approach:
 
-## Configuration
+1. Query Rubin photometry (optical: u,g,r,i,z,y bands)
+2. Supplement with external catalogs (UV, NIR, mid-IR)
+3. Combine and fit the full SED
 
-### Basic Setup
+Example configuration:
+
+```yaml
+# Start with Rubin query
+input:
+  type: rubin_tap
+  query: "SELECT * FROM dp02.PhotoObj WHERE ra BETWEEN 0 AND 10 AND dec BETWEEN 0 AND 10"
+  max_rows: 100
+
+# Supplement with external sources
+external_sources:
+  enabled: true
+  sources: [galex, allwise, vista]  # UV, mid-IR, near-IR
+  radius_arcsec: 3.0
+
+# Optional: add local files (e.g., JWST NIRCam, Spitzer)
+additional_data:
+  enabled: true
+  files:
+    - path: data/jwst_nircam.csv
+      format: csv
+```
+
+This produces complete SEDs spanning ~0.15 µm (GALEX FUV) to ~22 µm (AllWise W4).
+
+## Method 1: Local supplemental files
+
+Load extra FITS or CSV files to merge with primary photometry:
+
+```yaml
+additional_data:
+  enabled: true
+  files:
+    - path: data/galex_uv.csv         # UV bands
+      format: csv
+    - path: data/jwst_nircam.fits     # JWST photometry
+      format: fits
+```
+
+Each file must contain: `wavelength`, `flux`, `flux_err` columns (or with object IDs for batch).
+
+## Method 2: Catalog queries (GALEX, AllWise, VISTA, Euclid, Roman)
+
+Automatically query coordinate-based catalogs:
 
 ```yaml
 external_sources:
   enabled: true
-  sources:
-    - 'galex'
-    - 'allwise'
-    - 'vista'
-  radius_arcsec: 10.0
+  sources: [galex, allwise, vista, euclid, roman]  # Query all available
+  radius_arcsec: 3.0  # Search radius
 ```
 
-### With Rubin Data
+Supported catalogs:
+- **GALEX**: FUV (0.152 µm), NUV (0.227 µm) -- UV
+- **AllWise**: W1-W4 (3.4-22 µm) -- Mid-IR
+- **VISTA**: Z, Y, J, H, Ks (0.88-2.15 µm) -- Near-IR  
+- **Euclid**: VIS, Y, J, H (0.7-1.65 µm) -- Optical/NIR
+- **Roman**: F062 to F213 (0.62-2.13 µm) -- Optical/NIR
+
+## Combining All Three Methods
+
+For maximum wavelength coverage on important targets:
 
 ```yaml
 input:
-  type: 'rubin_tap'
-  ra: 150.0
-  dec: 2.5
-  radius_arcsec: 10.0
+  type: rubin_tap
+  query: "SELECT * FROM dp02.PhotoObj WHERE ..."
 
 external_sources:
   enabled: true
-  sources:
-    - 'galex'      # Add UV coverage
-    - 'allwise'    # Add mid-IR coverage
-  radius_arcsec: 10.0
-  prefer_primary: true  # Keep Rubin data when overlapping
-```
+  sources: [galex, allwise, vista]
+  radius_arcsec: 3.0
 
-### With FITS Catalog
-
-```yaml
-input:
-  type: 'fits'
-  filepath: './catalog.fits'
-  row_index: 0
-
-external_sources:
+additional_data:
   enabled: true
-  sources:
-    - 'vista'      # Add NIR coverage
-    - 'allwise'    # Add mid-IR coverage
-  radius_arcsec: 5.0  # Smaller radius for precise matching
+  files:
+    - path: data/jwst_ers_nircam.fits
+      format: fits
+    - path: data/spitzer_irac.csv
+      format: csv
 ```
 
-## Use Cases
+Final SED will contain all bands: Rubin (optical) + GALEX (UV) + VISTA (NIR) + AllWise (mid-IR) + JWST (NIR) + Spitzer (mid-IR) = 15+ bands for precise fitting.
 
-### 1. UV Extension for Star Clusters
+## When to Use
 
-Add GALEX UV photometry to constrain young stellar populations:
+- **Always for objects z < 1**: UV, optical, NIR, mid-IR coverage improves stellar mass + age estimates
+- **Essential for z > 0.5**: Broader wavelength coverage compensates for age/dust degeneracies
+- **Recommended for high-z (z > 2)**: See [Science Use Cases](science-use-cases.md) for limitations
 
-```yaml
-external_sources:
-  enabled: true
-  sources:
-    - 'galex'
-  radius_arcsec: 15.0  # Clusters may be extended
-```
+## Data Format Requirements
 
-### 2. Mid-IR Extension
+Local files must include for each object:
+- `wavelength`: Angstroms or microns (specified in config)
+- `flux`: Jy or erg/s/cm²/Å  
+- `flux_err`: Same units as flux
+- `object_id` (optional, for batch matching)
 
-Add AllWISE to constrain dust emission:
-
-```yaml
-external_sources:
-  enabled: true
-  sources:
-    - 'allwise'
-  radius_arcsec: 10.0
-```
-
-### 3. Full Wavelength Coverage
-
-Combine multiple sources for maximum coverage:
-
-```yaml
-external_sources:
-  enabled: true
-  sources:
-    - 'galex'      # UV
-    - 'vista'      # NIR
-    - 'allwise'    # Mid-IR
-  radius_arcsec: 10.0
-```
-
-## Data Quality Controls
-
-### Overlap Handling
-
-When external bands overlap with primary data:
-
-```yaml
-external_sources:
-  prefer_primary: true  # Keep Rubin/FITS data
-  min_wavelength_separation_um: 0.05  # 500 Angstroms minimum separation
-```
-
-### Quality Cuts
-
-Filter out low-quality photometry:
-
-```yaml
-external_sources:
-  max_magnitude: 25.0  # Reject faint detections
-  min_snr: 3.0  # Minimum signal-to-noise
-```
-
-## Installation Requirements
-
-Install astroquery for external catalog access:
-
-```bash
-pip install astroquery
-```
-
-## Examples
-
-### Example 1: GALEX + Rubin + AllWISE
-
-Complete UV to mid-IR SED:
-
-```yaml
-input:
-  type: 'rubin_tap'
-  ra: 53.1589
-  dec: -27.7867
-  radius_arcsec: 10.0
-
-rubin:
-  flux_type: 'psfFlux'
-  bands: ['u', 'g', 'r', 'i', 'z', 'y']
-
-external_sources:
-  enabled: true
-  sources:
-    - 'galex'
-    - 'allwise'
-  radius_arcsec: 10.0
-```
-
-Result: ~12-14 photometric bands covering 0.15-22 μm
-
-### Example 2: VISTA for NIR Enhancement
-
-```yaml
-input:
-  type: 'dat'
-  filepath: './optical_photometry.dat'
-
-external_sources:
-  enabled: true
-  sources:
-    - 'vista'
-  radius_arcsec: 10.0
-```
-
-### Example 3: Batch Processing with External Data
-
-```yaml
-input:
-  type: 'fits_batch'
-  fits_dir: './catalogs'
-  file_pattern: '*.fits'
-  max_rows_per_file: 100
-
-external_sources:
-  enabled: true
-  sources:
-    - 'galex'
-    - 'allwise'
-  radius_arcsec: 10.0
-```
-
-## Cross-Matching
-
-SPECTRA automatically cross-matches external sources to your targets:
-
-1. **Positional matching**: Within specified radius
-2. **Closest match**: Takes nearest source if multiple found
-3. **Wavelength checking**: Avoids duplicate wavelength coverage
-4. **Quality filtering**: Applies S/N and magnitude cuts
-
-## Output
-
-External photometry is seamlessly integrated:
-
-```python
-# In output photometry file
-wavelength,flux,flux_err,source
-0.152,1.2e-6,2.0e-7,galex    # GALEX FUV
-0.227,2.3e-6,3.0e-7,galex    # GALEX NUV
-0.464,5.1e-6,4.0e-7,primary  # Rubin g
-0.621,7.2e-6,5.0e-7,primary  # Rubin r
-...
-3.4,1.8e-5,1.5e-6,allwise    # WISE W1
-4.6,2.1e-5,1.8e-6,allwise    # WISE W2
-```
-
-## Troubleshooting
-
-### No External Data Found
-
-```
-[EXTERNAL] No external photometry found
-```
-
-**Solutions**:
-- Increase search radius
-- Check if target is in survey footprint
-- Verify RA/Dec are correct
-
-### Query Timeouts
-
-```
-[WARNING] Failed to query galex: Timeout
-```
-
-**Solutions**:
-- Check internet connection
-- Try again later
-- Reduce number of sources queried simultaneously
-
-### Band Overlap Warnings
-
-```
-[COMBINE] Removed 2 external bands due to overlap with primary
-```
-
-**This is normal**: `prefer_primary: true` keeps primary data over external
-
-## Best Practices
-
-1. **Start with GALEX + AllWISE**: Most complementary to optical
-2. **Adjust radius**: Smaller for point sources, larger for extended objects
-3. **Check coverage**: Plot SED to verify external data quality
-4. **Quality over quantity**: Filter low S/N detections
-5. **Document sources**: Output includes source labels
-
-## API Reference
-
-See [External Sources API](../api/external-sources.md) for programmatic usage.
-
-## Next Steps
-
-- [Input Data Guide](input-data.md)
-- [Data Loaders](data-loaders.md)
-- [Batch Processing](batch-processing.md)
+See [Input Formats](../inputs.md) for examples.

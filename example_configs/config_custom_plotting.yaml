@@ -1,1 +1,71 @@
-# ...existing content from config_custom_plotting.yaml...
+# config_custom_plotting.yaml
+# Demonstrates all available plot customization options.
+# Uses PHANGS as the data source — swap `input` for any other source.
+
+input:
+  type: phangs_fits
+  filepath: "/path/to/phangs_catalog.fits"
+  max_rows: 5
+
+ssp_model:
+  type: fsps
+  redshift: 0.00184
+  imf: kroupa
+  dust_type: 2
+
+fitting:
+  method: ml
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass: [2.0, 9.0]
+    age: [0.001, 13.5]
+    metallicity: [-2.5, 0.5]
+    dust: [0.0, 2.0]
+  error_floor: 0.05
+
+plotting:
+  output_dir: outputs/custom_plotting_demo
+
+  # Output formats — can include png, pdf, svg
+  formats: [png, pdf]
+  dpi: 200
+  figure_size: [12, 8]       # [width, height] in inches
+
+  # Style preset: 'default', 'publication' (serif fonts, larger text), 'minimal'
+  plot_style: publication
+
+  # What to include on the SED plot
+  show_components: true      # Show unattenuated stellar model curve
+  show_error_bars: true      # Error bars on observed photometry
+  show_residuals: true       # Residuals panel below SED
+  show_parameter_box: true   # Annotate best-fit values on the plot
+
+  # Axis units
+  wavelength_units: micron   # 'micron' or 'angstrom'
+  flux_units: jy             # 'jy' or 'erg'
+
+  # Data point and line sizes
+  marker_size_obs: 12
+  marker_size_model: 120
+  line_width: 1.5
+
+  # Legend
+  legend_location: upper right
+  legend_fontsize: 10
+
+  # Grid
+  show_grid: true
+  grid_alpha: 0.3
+
+  # Custom colors (any valid matplotlib hex or named color)
+  color_scheme:
+    observed: '#2980B9'        # Observed photometry points
+    model: '#E74C3C'           # Best-fit model points
+    unattenuated: '#F1C40F'    # Unattenuated model curve
+    residual_good: '#2ECC71'   # Residual < 1 sigma
+    residual_warn: '#F39C12'   # Residual 1-2 sigma
+    residual_bad: '#E74C3C'    # Residual > 2 sigma
+
+output:
+  save_photometry: true
+  save_samples: false

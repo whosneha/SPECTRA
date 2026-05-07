@@ -1,23 +1,56 @@
 # Input Formats
 
-Set `input.type` in `config.yaml` to one of the following:
+## Multi-Wavelength Workflows
 
-## `fornax_csv`
-A multi-band long-format CSV. Each row is one band measurement for one object.
+**Primary use case**: Combine Rubin optical photometry with external UV/NIR/mid-IR sources.
 
-**Required columns:**
-| Column | Description |
-|--------|-------------|
-| `object_id` | Unique cluster identifier |
-| `band` | Filter name (`g`, `r`, `i`, …) |
-| `wavelength_um` | Central wavelength in microns |
-| `flux_nJy` | Flux density in nanojansky |
-| `flux_err_nJy` | 1-sigma flux error in nanojansky |
-| `mag_AB` | AB magnitude |
-| `mag_err` | Magnitude error |
-| `redshift` | Object redshift |
-| `ra_deg`, `dec_deg` | Coordinates in decimal degrees |
-| `aperture_arcsec` | Photometric aperture radius |
+### Simple approach: Rubin + local files
+
+```yaml
+input:
+  type: rubin_tap
+  query: "SELECT * FROM dp02.PhotoObj ..."
+
+additional_data:
+  enabled: true
+  files:
+    - path: data/galex_fuv_nuv.csv      # UV: 2 bands
+      format: csv
+    - path: data/allwise_w1_w2.csv      # Mid-IR: 2 bands
+      format: csv
+```
+
+Result: Rubin 6 optical bands + GALEX 2 UV bands + AllWise 2 mid-IR bands = 10 bands total.
+
+### Advanced: Query external catalogs automatically
+
+```yaml
+input:
+  type: rubin_cone_search
+  ra: 150.5
+  dec: 2.3
+  radius_arcmin: 0.5
+
+external_sources:
+  enabled: true
+  sources: [galex, allwise, vista]  # Auto-query
+  radius_arcsec: 3.0
+```
+
+Result: Rubin (6 bands) + GALEX (2 UV) + AllWise (4 mid-IR) + VISTA (5 NIR) = 17 bands.
+
+---
+
+## fornax_csv
+
+Use long-format Fornax CSV files.
+
+Required columns include:
+
+- `object_id`, `band`, `wavelength_um`
+- `flux_nJy`, `flux_err_nJy`
+- `mag_AB`, `mag_err`
+- `ra_deg`, `dec_deg`, `aperture_arcsec`, `redshift`
 
 ```yaml
 input:
@@ -25,54 +58,39 @@ input:
   filepath: data/fornax_gc_photometry.csv
 ```
 
----
+## phangs_fits
 
-## `fits_batch`
-Process all FITS files in a directory (e.g. PHANGS-HST catalogs).
+```yaml
+input:
+  type: phangs_fits
+  filepath: /path/to/phangs_catalog.fits
+  max_rows: 10
+```
+
+## fits_batch
 
 ```yaml
 input:
   type: fits_batch
   fits_dir: /path/to/catalogs
-  file_pattern: "hlsp_phangs-cat_*.fits"
-  max_rows_per_file: 10   # null = all rows
+  file_pattern: "*.fits"
+  max_rows_per_file: 20
 ```
 
----
+## rubin modes
 
-## `rubin_tap`
-Query the Rubin/LSST Science Platform by sky coordinates.
+- `rubin_id`
+- `rubin_tap`
+- `rubin_batch_ids`
+- `rubin_cone_search`
+- `rubin_from_csv`
+
+These require a Rubin token in config or environment.
+
+## local single-file modes
 
 ```yaml
 input:
-  type: rubin_tap
-  ra: 39.9507
-  dec: -34.2584
-  radius_arcsec: 10.0
-rubin:
-  rsp_token: "YOUR_TOKEN"
-  flux_type: cModelFlux
-  bands: [g, r, i]
-```
-
----
-
-## `rubin_id`
-Query a single Rubin object by its catalog ID.
-
-```yaml
-input:
-  type: rubin_id
-  rubin_id: 1234567890
-```
-
----
-
-## `fits` / `csv` / `dat`
-Single-file inputs.
-
-```yaml
-input:
-  type: csv
-  filepath: my_photometry.csv
+  type: csv   # or dat or fits
+  filepath: /path/to/file.csv
 ```

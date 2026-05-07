@@ -1,24 +1,11 @@
-site_name: SPECTRA - Spectral Energy Distribution Fitting
-site_description: A Python package for SED fitting using SSP models
+site_name: SPECTRA
+site_description: SED fitting pipeline for multi-band photometry
 site_author: SPECTRA Team
-repo_url: https://github.com/yourusername/SPECTRA
+repo_url: https://github.com/whosneha/SPECTRA
 repo_name: SPECTRA
 
 theme:
   name: material
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
   features:
     - navigation.tabs
     - navigation.sections
@@ -26,37 +13,19 @@ theme:
     - navigation.top
     - search.suggest
     - search.highlight
-    - content.code.annotate
     - content.code.copy
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            show_source: true
-            show_root_heading: true
-            heading_level: 2
 
 markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
   - pymdownx.superfences
-  - pymdownx.tabbed:
-      alternate_style: true
-  - admonition
-  - pymdownx.details
-  - pymdownx.arithmatex:
-      generic: true
-  - attr_list
-  - md_in_html
-
-extra_javascript:
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
   - Home: index.md
@@ -64,32 +33,25 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
+  - Reference:
+      - Configuration Reference: configuration.md
+      - Input Formats: inputs.md
+      - Outputs: outputs.md
   - User Guide:
       - Input Data: user-guide/input-data.md
       - Data Loaders: user-guide/data-loaders.md
-      - External Sources: user-guide/external-sources.md
-      - SSP Models: user-guide/ssp-models.md
       - Fitting Methods: user-guide/fitting-methods.md
-      - MCMC Sampling: user-guide/mcmc.md
+      - MCMC: user-guide/mcmc.md
       - Visualization: user-guide/visualization.md
       - Batch Processing: user-guide/batch-processing.md
-  - Tutorials:
-      - Single Object Fitting: tutorials/single-object.md
-      - FITS Batch Processing: tutorials/fits-batch.md
-      - Rubin Observatory Data: tutorials/rubin-data.md
-      - Custom Models: tutorials/custom-models.md
-  - API Reference:
-      - Main: api/main.md
-      - Data Loading: api/data-loading.md
-      - Models: api/models.md
-      - Likelihood: api/likelihood.md
-      - Fitting: api/fitting.md
-      - MCMC: api/mcmc.md
-      - Utils: api/utils.md
+      - SSP Models: user-guide/ssp-models.md
+      - External Sources: user-guide/external-sources.md
+      - Science Use Cases: user-guide/science-use-cases.md
+  - Tutorial:
+      - FITS Batch: tutorials/fits-batch.md
+  - API:
+      - Main Pipeline: api/main.md
   - Examples:
-      - Example Configs: examples/configs.md
       - Gallery: examples/gallery.md
   - Development:
-      - Contributing: development/contributing.md
-      - Testing: development/testing.md
-      - Release Notes: development/releases.md
+      - Testing: testing-guide.md

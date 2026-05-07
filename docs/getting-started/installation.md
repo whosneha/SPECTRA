@@ -2,77 +2,45 @@
 
 ## Requirements
 
-- Python 3.8 or higher
-- pip or conda package manager
+- Python 3.9+
+- pip
 
-## Dependencies
-
-SPECTRA requires the following Python packages:
-
-- `numpy` - Numerical computations
-- `scipy` - Scientific computing and optimization
-- `matplotlib` - Plotting and visualization
-- `pandas` - Data manipulation
-- `astropy` - Astronomical data handling
-- `emcee` - MCMC sampling
-- `corner` - Corner plots for MCMC results
-- `PyYAML` - Configuration file parsing
-- `h5py` - HDF5 file support
-
-## Installation Steps
-
-### Option 1: From Source (Recommended)
+## Install from repository
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/SPECTRA.git
+git clone https://github.com/whosneha/SPECTRA.git
 cd SPECTRA
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Or using conda
-conda env create -f environment.yml
-conda activate spectra
 ```
 
-### Option 2: Development Installation
+## Verify installation
+
+After installing, verify that all dependencies and modules are working correctly:
 
 ```bash
-# Clone and install in development mode
-git clone https://github.com/yourusername/SPECTRA.git
-cd SPECTRA
-pip install -e .
+python tests/run_installation_tests.py
 ```
 
-## Verify Installation
+This runs a comprehensive smoke test suite that checks:
+- All required packages are installed
+- Core SPECTRA modules import correctly
+- Configuration files are valid
+- Data loaders work as expected
 
-```python
-import sys
-sys.path.insert(0, 'src')
+All tests should pass (34/34).
 
-from src.models.ssp_model import SSPModel
-from src.likelihood import Likelihood
-from src.fit import SEDFitter
-
-print("SPECTRA installed successfully!")
-```
-
-## Optional: Rubin Observatory Access
-
-For accessing Rubin Observatory data via TAP:
+## Run without package install
 
 ```bash
-pip install lsst-rsp pyvo
+./bin/spectra --help
 ```
 
-Set your RSP token:
+If needed, use:
 
 ```bash
-export RSP_TOKEN="your-token-here"
+python run.py --help
 ```
 
-## Next Steps
+## Optional FSPS setup
 
-- [Quick Start Guide](quickstart.md)
-- [Configuration Guide](configuration.md)
+SPECTRA can run without FSPS (fallback/mock mode). If you want FSPS-backed models, install FSPS and set SPS_HOME.

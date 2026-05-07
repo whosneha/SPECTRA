@@ -1,21 +1,24 @@
 # Outputs
 
-All outputs are written to `plotting.output_dir`:
+All run products are written under `plotting.output_dir`.
+
+## Typical layout
 
 ```text
 outputs/fornax_gc/
-├── NGC1049/
-│   ├── sed_plot.png
-│   └── NGC1049_photometry.csv   # if output.save_photometry: true
-├── ESO356-SC001/
-│   └── ...
-└── fit_summary.csv              # best-fit parameters for all objects
+  fit_summary.csv
+  NGC1049/
+    sed_fit_NGC1049.png
+    residuals.png
+    NGC1049_photometry.csv
 ```
 
-| File | Description |
-|------|-------------|
-| `sed_plot.png` | Observed photometry + best-fit model SED |
-| `corner_plot.png` | MCMC posterior corner plot (mcmc only) |
-| `mcmc_samples.h5` | Raw MCMC chains (if `output.save_samples: true`) |
-| `*_photometry.csv` | Per-object flux table with model fluxes |
-| `fit_summary.csv` | One row per object with all best-fit parameters |
+MCMC runs add files such as:
+
+- `corner_plot.png`
+- `trace_plot.png`
+- `mcmc_samples.h5` (if enabled)
+
+## Summary table
+
+`fit_summary.csv` contains one row per object with fitted parameters and fit diagnostics.

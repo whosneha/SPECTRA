@@ -1,1 +1,55 @@
-# ...existing content from config_presentation_plotting.yaml...
+# config_presentation_plotting.yaml
+# High-resolution, publication-style plots suitable for talks and papers.
+# Serif fonts, large text, PDF + PNG output.
+
+input:
+  type: phangs_fits
+  filepath: "/path/to/phangs_catalog.fits"
+  max_rows: 5
+
+ssp_model:
+  type: fsps
+  redshift: 0.00184
+  imf: kroupa
+  dust_type: 2
+
+fitting:
+  method: mcmc
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass: [2.0, 9.0]
+    age: [0.001, 13.5]
+    metallicity: [-2.5, 0.5]
+    dust: [0.0, 2.0]
+  error_floor: 0.05
+
+plotting:
+  output_dir: outputs/presentation_demo
+  formats: [pdf, png]
+  dpi: 300                   # Print-quality resolution
+  figure_size: [14, 9]
+  plot_style: publication    # Serif fonts, 14pt base text
+  show_components: true
+  show_error_bars: true
+  show_residuals: true
+  show_parameter_box: true
+  wavelength_units: micron
+  flux_units: jy
+  marker_size_obs: 14
+  marker_size_model: 150
+  line_width: 2.0
+  legend_location: upper right
+  legend_fontsize: 12
+  show_grid: true
+  grid_alpha: 0.2
+  color_scheme:
+    observed: '#1A237E'      # Deep blue
+    model: '#B71C1C'         # Deep red
+    unattenuated: '#F57F17'  # Amber
+    residual_good: '#1B5E20'
+    residual_warn: '#E65100'
+    residual_bad: '#B71C1C'
+
+output:
+  save_photometry: true
+  save_samples: true

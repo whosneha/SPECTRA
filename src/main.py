@@ -44,6 +44,8 @@ def get_input_data(config):
         row_indices = input_config.get('row_indices', None)
         min_valid  = input_config.get('min_valid_bands', 3)
         err_floor  = input_config.get('error_floor_frac', 0.05)
+        object_id_mode = input_config.get('object_id_mode', 'row')
+        redshift_override = input_config.get('redshift_override', None)
 
         if not filepath:
             raise ValueError("filepath must be specified for phangs_fits input type")
@@ -57,6 +59,8 @@ def get_input_data(config):
             max_rows=max_rows,
             min_valid_bands=min_valid,
             error_floor_frac=err_floor,
+            object_id_mode=object_id_mode,
+            redshift_override=redshift_override,
         )
         print(f"[INPUT] Loaded {len(datasets)} clusters")
 

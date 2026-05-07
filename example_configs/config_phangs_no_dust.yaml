@@ -1,18 +1,22 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# SPECTRA config — PHANGS-HST IC 5332, 3-parameter fit (no dust)
-# Run with:  spectra --config example_configs/config_phangs_no_dust.yaml
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# SPECTRA config — PHANGS-HST legacy-compat mode (cluster 1)
+# This mode reproduces earlier PHANGS batch behavior while using the
+# dedicated PHANGS loader for stable band extraction.
+# Run with: python run.py example_configs/config_phangs_no_dust.yaml
+# -----------------------------------------------------------------------------
 
 input:
   type: phangs_fits
   filepath: "/Users/snehanair/Downloads/catalogs 2/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits"
-  max_rows: 10
+  row_indices: [0]
   min_valid_bands: 3
   error_floor_frac: 0.10
+  object_id_mode: legacy
+  redshift_override: 0.0
 
 ssp_model:
   type: fsps
-  redshift: 0.00184
+  redshift: 0.0
   imf: chabrier
   sfh: 0
   dust_type: 2
@@ -27,23 +31,32 @@ fitting:
     - mass
     - age
     - metallicity
+    - dust
 
   priors:
     mass:         [2.0,  7.0]
     age:          [0.001, 1.0]
     metallicity:  [-1.5,  0.3]
+    dust:         [0.0,   1.5]
 
 mcmc:
   n_walkers:  100
   n_steps:    5000
   burn_in:    500
   thin:       10
+  random_seed: 42
 
 plotting:
-  output_dir: "outputs/phangs_ic5332_no_dust"
+  output_dir: "outputs/phangs_batch_results"
   show_plots: false
   save_plots: true
-  plot_format: png
+  formats: [png]
+  plot_style: publication
+  show_components: true
+  show_error_bars: true
+  show_residuals: true
+  show_parameter_box: true
+  figure_size: [14, 10]
   dpi: 150
 
 output:

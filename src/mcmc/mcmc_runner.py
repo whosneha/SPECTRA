@@ -23,6 +23,7 @@ class MCMCRunner:
         self.n_burnin = self.config.get('n_burnin', 300)
         self.n_threads = self.config.get('n_threads', 1)
         self.thin = self.config.get('thin', 1)  # Thinning factor
+        self.random_seed = self.config.get('random_seed', None)
         
         self.sampler = None
         self.samples = None
@@ -77,6 +78,9 @@ class MCMCRunner:
         """
         # Initialize walker positions spread across the prior volume
         # Use Latin hypercube-like initialization for better coverage
+        if self.random_seed is not None:
+            np.random.seed(int(self.random_seed))
+
         p0_base = np.array([initial_params[p] for p in param_names])
         n_dim = len(param_names)
         

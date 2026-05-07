@@ -1,50 +1,28 @@
 # SPECTRA Documentation
 
-Welcome to the SPECTRA (Spectral Energy Distribution fitting with MCMC) documentation!
+SPECTRA is a Python pipeline for fitting spectral energy distributions (SEDs) from multi-band photometry.
 
-## Overview
+## Main Use Case
 
-SPECTRA is a Python package for fitting Spectral Energy Distributions (SEDs) of astronomical objects using Simple Stellar Population (SSP) models. It supports multiple data sources, fitting methods, and provides comprehensive visualization tools.
+**Rubin/LSST multi-wavelength SED fitting** -- Combine Rubin optical photometry with external sources (GALEX UV, AllWise mid-IR, VISTA near-IR, future missions like Euclid and Roman) to fit galaxy and star cluster SEDs across wavelengths from UV to mid-IR, suitable for z < 1 objects.
 
-## Key Features
+## What SPECTRA supports
 
-- **Multiple Data Sources**: Support for FITS files, CSV, DAT, and Rubin Observatory TAP queries
-- **Flexible Fitting**: Maximum likelihood and MCMC (Markov Chain Monte Carlo) methods
-- **SSP Models**: Integration with stellar population synthesis models
-- **Batch Processing**: Process multiple objects efficiently
-- **Rich Visualization**: Automatic generation of SED plots, corner plots, and diagnostics
-- **Extensible**: Easy to add custom models and data loaders
+- **Rubin data sources**: Direct TAP queries, single object by ID, cone searches, batch from CSV
+- **External catalogs**: GALEX (UV), AllWise (mid-IR), VISTA (near-IR), Euclid, Roman
+- **File inputs**: CSV, DAT, FITS (single or batch), with optional local supplemental files
+- **Catalog loaders**: PHANGS-HST FITS and Fornax GC CSV
+- **Fitting modes**: Maximum-likelihood (fast, seconds) and MCMC (full posteriors, minutes)
+- **Batch processing** and per-object output folders
 
-## Quick Example
+## Start here
 
-```python
-import yaml
-from src.main import get_input_data, process_single_object
+1. Installation: [Getting Started / Installation](getting-started/installation.md)
+2. First run: [Getting Started / Quick Start](getting-started/quickstart.md)
+3. Config basics: [Getting Started / Configuration](getting-started/configuration.md)
 
-# Load configuration
-with open('config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
+## Core references
 
-# Get data and process
-datasets = get_input_data(config)
-for object_id, phot_data in datasets:
-    results = process_single_object(object_id, phot_data, config, config['ssp_model'])
-```
-
-## Installation
-
-```bash
-git clone https://github.com/yourusername/SPECTRA.git
-cd SPECTRA
-pip install -r requirements.txt
-```
-
-## Getting Started
-
-1. [Installation Guide](getting-started/installation.md)
-2. [Quick Start Tutorial](getting-started/quickstart.md)
-3. [Configuration Guide](getting-started/configuration.md)
-
-## Support
-
-For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/yourusername/SPECTRA).
+- Inputs: [Input Formats](inputs.md)
+- Config keys: [Configuration Reference](configuration.md)
+- Outputs: [Outputs](outputs.md)

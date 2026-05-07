@@ -1,18 +1,12 @@
 # Welcome to SPECTRA
 
-**SPECTRA** (Stellar Population Extractor for Clusters via Template-fitted
-Resolved Aperture photometry) fits spectral energy distributions (SEDs) of
-star clusters and galaxies against simple stellar population (SSP) models.
+SPECTRA fits observed photometry to SSP-based models and returns best-fit physical parameters and diagnostic plots.
 
-## What can SPECTRA do?
+Use this docs set for a practical workflow:
 
-- Fit multi-band photometry to recover **stellar mass, age, metallicity, and dust**
-- Ingest data from **LSST/Rubin**, **PHANGS-HST FITS catalogs**, or plain **CSV/DAT** files
-- Run **maximum-likelihood** or full **MCMC** (emcee) fitting
-- Produce publication-quality **SED plots** and **corner plots**
-- Process entire **batches** of clusters in one command
+1. Install dependencies
+2. Pick or build a config file
+3. Run a quick ML fit
+4. Run MCMC when you need posterior uncertainties
 
-## Contents
-
-```{tableofcontents}
-```
+For the fastest route, go to [Quick Start](getting-started/quickstart.md).

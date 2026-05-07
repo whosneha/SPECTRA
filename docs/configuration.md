@@ -1,79 +1,46 @@
 # Configuration Reference
 
-All pipeline behaviour is controlled by a single `config.yaml` file.
+## input
 
----
+- `type`: one of `fornax_csv`, `phangs_fits`, `fits`, `fits_batch`, `csv`, `dat`, `rubin_id`, `rubin_tap`, `rubin_batch_ids`, `rubin_cone_search`, `rubin_from_csv`, `file_list`
+- `filepath`: required for single-file inputs
+- `max_rows`: optional row cap for supported inputs
+- `row_indices`: optional explicit rows for FITS-style inputs
 
-## `input`
+## ssp_model
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `type` | str | Input format — see [Input Formats](inputs.md) |
-| `filepath` | str | Path to file (for `fornax_csv`, `csv`, `fits`, `dat`) |
-| `fits_dir` | str | Directory of FITS files (for `fits_batch`) |
-| `file_pattern` | str | Glob pattern for FITS files |
-| `max_rows_per_file` | int\|null | Max objects per FITS file |
+- `type`: usually `fsps`
+- `redshift`: default redshift
+- `imf`: e.g. `kroupa`, `chabrier`, `salpeter`
+- `distance_mpc`: optional, useful for some setups
 
----
+## fitting
 
-## `ssp_model`
+- `method`: `ml` or `mcmc`
+- `parameters`: fitted parameters
+- `priors`: `[min, max]` bounds per parameter
+- `error_floor`: fractional floor on photometric errors
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `type` | `fsps` | SSP library (only `fsps` currently supported) |
-| `imf` | `kroupa` | IMF: `kroupa`, `chabrier`, `salpeter` |
-| `dust_model` | `calzetti` | Attenuation law |
-| `distance_mpc` | — | Physical distance in Mpc |
-| `redshift` | `0.0` | Object redshift |
+## mcmc
 
----
+Used only when `fitting.method: mcmc`.
 
-## `fitting`
+- `n_walkers`
+- `n_steps`
+- `n_burnin`
+- `thin`
+- `n_threads`
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `method` | `ml` | `ml` (max-likelihood) or `mcmc` |
-| `parameters` | — | List of free parameters to fit |
-| `priors` | — | `[min, max]` uniform prior for each parameter |
-| `error_floor` | `0.05` | Fractional flux error floor added in quadrature |
+## plotting
 
-### Free parameters
+- `output_dir`
+- `show_plots`
+- `save_plots`
+- `plot_format`
+- `dpi`
 
-| Parameter | Units | Typical range |
-|-----------|-------|---------------|
-| `mass` | log(M☉) | [8, 14] |
-| `age` | Gyr | [0.01, 13.5] |
-| `metallicity` | [Z/H] | [-2.5, 0.5] |
-| `dust` | E(B-V) | [0, 2] |
+## output
 
----
-
-## `mcmc`
-
-Only used when `fitting.method: mcmc`.
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `n_walkers` | `32` | Number of emcee walkers |
-| `n_steps` | `500` | Steps per walker |
-| `n_burnin` | `200` | Burn-in steps (discarded) |
-| `thin` | `3` | Thinning factor |
-| `n_threads` | `4` | Parallel threads |
-
----
-
-## `plotting`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `output_dir` | `outputs/` | Root output directory |
-| `formats` | `[png]` | Output formats: `png`, `pdf`, `svg` |
-
----
-
-## `output`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `save_photometry` | `false` | Save per-object flux table as CSV |
-| `save_samples` | `false` | Save MCMC chain as HDF5 |
+- `save_photometry`
+- `save_samples`
+- `photometry_format`

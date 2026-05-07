@@ -2,7 +2,7 @@
 
 **SED Parameter Estimation Code for The Rubin Astronomy**
 
-A flexible SED fitting pipeline for stellar populations using multi-wavelength photometry. Designed for Rubin/LSST with native support for PHANGS-HST star clusters and custom catalogs.
+A flexible SED fitting pipeline for stellar populations using multi-wavelength photometry. **Primary use case: Rubin/LSST photometry combined with external sources (GALEX, AllWise, VISTA, Euclid, Roman)** for z < 1 objects. Also supports PHANGS-HST star clusters and custom catalogs.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,8 +11,8 @@ A flexible SED fitting pipeline for stellar populations using multi-wavelength p
 
 ## Features
 
-- Multi-wavelength SED fitting -- UV to mid-IR photometry (GALEX + HST + JWST + Rubin + WISE)
-- Rubin/LSST ready -- Direct TAP queries to Rubin Science Platform
+- **Rubin + external sources** -- Combine Rubin optical photometry with UV (GALEX), NIR (AllWise, VISTA), and future missions (Euclid, Roman)
+- Rubin/LSST ready -- Direct TAP queries to Rubin Science Platform, plus file-based inputs (FITS, CSV)
 - PHANGS-HST support -- Native FITS loader for PHANGS star cluster catalogs
 - Flexible SSP models -- FSPS with Chabrier/Kroupa/Salpeter IMF + Calzetti dust
 - Fast ML or full MCMC -- Maximum likelihood (seconds) or Bayesian posteriors (minutes)
@@ -82,12 +82,13 @@ SPECTRA/
 │   └── config_presentation_plotting.yaml
 │
 ├── docs/                         # Documentation
-│   ├── INSTALL.md
-│   ├── USAGE.md
-│   ├── OUTPUTS_GUIDE.md
-│   ├── TESTING.md
-│   ├── QUICK_REFERENCE.md
-│   └── EXAMPLE_MULTIBAND_CONFIG.md
+│   ├── index.md
+│   ├── getting-started/
+│   ├── user-guide/
+│   ├── tutorials/
+│   ├── api/
+│   ├── examples/
+│   └── testing.md
 │
 ├── notebooks/
 │   └── SPECTRA_RSP_Tutorial.ipynb
@@ -154,7 +155,19 @@ pip install fsps
 
 **Without FSPS**: Pipeline uses physically-motivated mock SSP models (good for testing/development).
 
-See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation guide.
+See **[docs/getting-started/installation.md](docs/getting-started/installation.md)** for full installation steps.
+
+---
+
+## Verify Installation
+
+After installing, run the test suite to verify everything works:
+
+```bash
+python tests/run_installation_tests.py
+```
+
+This tests all dependencies, core modules, and basic functionality. All 34 tests should pass.
 
 ---
 
@@ -180,7 +193,41 @@ See **[docs/INSTALL.md](docs/INSTALL.md)** for full installation guide.
 
 ## Usage Examples
 
-### Example 1: PHANGS-HST Star Clusters
+### Example 1: Rubin + External Multi-Wavelength (PRIMARY USE CASE)
+
+Combine Rubin optical with GALEX UV, AllWise mid-IR, and VISTA near-IR:
+
+```bash
+spectra --config example_configs/config_rubin_galex.yaml --method ml
+```
+
+**Config**:
+```yaml
+input:
+  type: rubin_id
+  rubin_id: 1234567890
+
+# Query external catalogs automatically
+external_sources:
+  enabled: true
+  sources: [galex, allwise, vista]
+  radius_arcsec: 3.0
+
+# Or load from local files
+additional_data:
+  enabled: true
+  files:
+    - path: "data/galex_rubin_1234567890.csv"
+      format: csv
+```
+
+This produces SEDs from 0.15 μm (GALEX FUV) to 22 μm (AllWise W4) for precise stellar mass and age estimates.
+
+See [External Sources Guide](docs/user-guide/external-sources.md) for more workflows.
+
+---
+
+### Example 2: PHANGS-HST Star Clusters
 
 ```bash
 spectra --config example_configs/config_phangs.yaml --method mcmc --max-rows 10
@@ -196,7 +243,7 @@ input:
 
 ---
 
-### Example 2: Rubin/LSST Single Object
+### Example 3: Rubin/LSST Single Object
 
 ```bash
 export RSP_TOKEN="your_token_here"
@@ -217,7 +264,7 @@ rubin:
 
 ---
 
-### Example 3: Batch Rubin Objects
+### Example 4: Batch Rubin Objects
 
 ```bash
 spectra --config example_configs/config_rubin_batch.yaml --method ml
@@ -235,44 +282,13 @@ input:
 
 ---
 
-### Example 4: Rubin + GALEX Multi-Wavelength
+### Example 5: Rubin from CSV File
 
-Combine Rubin optical with external UV/IR data:
+Use `rubin_from_csv` to process a list of object IDs:
 
 ```bash
-spectra --config example_configs/config_rubin_galex.yaml
+spectra --config example_configs/config_rubin_from_csv.yaml --method ml
 ```
-
-**Config**:
-```yaml
-input:
-  type: rubin_id
-  rubin_id: 1234567890
-
-additional_data:
-  enabled: true
-  files:
-    - path: "data/galex_rubin_1234567890.csv"
-      format: csv
-    - path: "data/wise_rubin_1234567890.csv"
-      format: csv
-```
-
-**GALEX CSV format** (`galex_rubin_1234567890.csv`):
-```csv
-wavelength,flux,flux_err,band
-1528,1.23e-6,1.45e-7,GALEX_FUV
-2271,2.34e-6,2.10e-7,GALEX_NUV
-```
-
-**WISE CSV format** (`wise_rubin_1234567890.csv`):
-```csv
-wavelength,flux,flux_err,band
-33526,5.67e-5,3.21e-6,WISE_W1
-46028,4.32e-5,2.87e-6,WISE_W2
-```
-
-See **[docs/EXAMPLE_MULTIBAND_CONFIG.md](docs/EXAMPLE_MULTIBAND_CONFIG.md)** for full tutorial.
 
 ---
 
@@ -414,7 +430,7 @@ object_id,redshift,comment
 spectra --config example_configs/config_single_fits.yaml
 ```
 
-See **[docs/USAGE.md](docs/USAGE.md)** for all examples.
+See **[docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)** for runnable command examples.
 
 ---
 
@@ -533,7 +549,7 @@ outputs/phangs_ic5332_top10_fsps/
     └── ...
 ```
 
-See **[docs/OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md)** for complete output reference.
+See **[docs/outputs.md](docs/outputs.md)** for complete output reference.
 
 ---
 
@@ -591,36 +607,54 @@ Jupyter tutorial for Rubin Science Platform:
 jupyter notebook notebooks/SPECTRA_RSP_Tutorial.ipynb
 ```
 
-See **[docs/TESTING.md](docs/TESTING.md)** for testing guide.
+See **[docs/testing-guide.md](docs/testing-guide.md)** for testing commands.
 
 ---
 
 ## Documentation
 
-- **[INSTALL.md](docs/INSTALL.md)** -- Installation instructions
-- **[USAGE.md](docs/USAGE.md)** -- Detailed usage examples
-- **[OUTPUTS_GUIDE.md](docs/OUTPUTS_GUIDE.md)** -- Understanding all output files
-- **[TESTING.md](docs/TESTING.md)** -- Running tests + Jupyter tutorial
-- **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** -- Command cheat sheet
-- **[EXAMPLE_MULTIBAND_CONFIG.md](docs/EXAMPLE_MULTIBAND_CONFIG.md)** -- Multi-wavelength tutorial
+- **[docs/index.md](docs/index.md)** -- Documentation home
+- **[docs/getting-started/installation.md](docs/getting-started/installation.md)** -- Installation
+- **[docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)** -- Quick run commands
+- **[docs/configuration.md](docs/configuration.md)** -- Configuration reference
+- **[docs/inputs.md](docs/inputs.md)** -- Input formats
+- **[docs/outputs.md](docs/outputs.md)** -- Output files and structure
+- **[docs/testing-guide.md](docs/testing-guide.md)** -- Testing commands
 
 ---
 
 ## Science Use Cases
 
-SPECTRA has been tested on:
+SPECTRA is designed for **stellar population SED fitting** with multi-wavelength photometry. It works best for:
 
-- PHANGS-HST star clusters (5-band HST/UVIS photometry)
-- Rubin/LSST DP0.2 (ugrizy photometry via TAP)
-- Multi-wavelength galaxies (GALEX + HST + Rubin + WISE)
+### Ideal Use Cases
 
-**Typical runtime**:
-- ML fitting: ~1 second per object
-- MCMC fitting: ~2 minutes per object
+- **Star clusters** (z ≈ 0): HST/UVIS photometry of nearby star clusters; young to intermediate ages (5 Myr – 1 Gyr). Example: PHANGS-HST (z = 0.00184, 5 bands).
+- **Nearby galaxies** (z < 0.1): Integrated light from resolved galaxies; UV–NIR wavelength coverage. Example: Rubin/LSST (z ~ 0.01–0.1, 6 bands).
+- **Multi-wavelength photometry** (z < 1): Objects with 8+ bands spanning UV (GALEX) → optical (HST/Rubin) → NIR (WISE). Example: CANDELS, COSMOS.
+- **LSST-era surveys**: Photometric redshifts validated with secure spectroscopy; ~10–100k objects.
 
-**Typical chi-squared/DOF**:
-- Star clusters (5 bands): 1.5-3.0
-- Galaxies (12 bands): 1.0-2.0
+### Known Limitations
+
+**High-redshift objects (z > 2–3)** are challenging due to:
+- **Degenerate ages**: Rest-frame UV collapses with age at high-z; stellar populations at z=4 appear older in observed colors than they are.
+- **Limited wavelength coverage**: Observer-frame optical (~0.4–0.8 μm) probes rest-frame UV (0.1–0.2 μm at z=4), losing age sensitivity. Need IR data (Spitzer, JWST) for rest-frame optical.
+- **Dust attenuation**: High-z galaxies are dustier; dust-age degeneracies worsen. Models must account for dust variation.
+- **Model assumptions**: SSP models (FSPS, BC03) are calibrated on nearby stars; extrapolation to z=4 introduces systematic uncertainties in stellar libraries and isochrones.
+- **Sky subtraction**: Faint high-z objects require tight sky background precision (challenging with current space telescopes).
+
+**Recommendation**: High-z SED fitting requires:
+- Spectroscopic redshift (not photometric)
+- Secure photometry (SNR > 10 per band)
+- IR data (Spitzer/JWST) for rest-frame optical/NIR
+- Dust model explicitly fitted (not fixed)
+- Multiple age priors or Bayesian model comparison
+
+### Typical Performance
+
+- **ML fitting**: ~1 second per object
+- **MCMC fitting**: ~2 minutes per object (32 walkers, 1000 steps, 200 burn-in)
+- **Reduced χ²**: 1.5–3.0 (star clusters, 5 bands); 1.0–2.0 (galaxies, 12 bands)
 
 ---
 
