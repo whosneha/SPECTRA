@@ -1,0 +1,82 @@
+# =============================================================================
+# SPECTRA Configuration File - Local File Input Test
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Data Input Configuration
+# -----------------------------------------------------------------------------
+input:
+  # Use local file instead of Rubin query
+  type: "file"
+  
+  # Path to local photometry file (CSV, DAT, or FITS)
+  filepath: "/Users/snehanair/Downloads/out/test_photometry.csv"
+  format: "csv"
+  
+  # Not used for file input
+  rubin_id: null
+  ra: null
+  dec: null
+  radius_arcsec: 10.0
+
+# -----------------------------------------------------------------------------
+# Rubin/LSST Authentication (not needed for local files)
+# -----------------------------------------------------------------------------
+rubin:
+  rsp_token: "gt-4nikqhC-Z-s3tIUeH_4Gmw.1UteXiH_ZnQBknLS8GSH6Q"
+  tap_url: "https://data.lsst.cloud/api/tap"
+  catalog: "dp02_dc2_catalogs.Object"
+  flux_type: "cModelFlux"
+  bands: [u, g, r, i, z, y]
+
+# -----------------------------------------------------------------------------
+# Additional Data Sources (for combining with Rubin)
+# -----------------------------------------------------------------------------
+additional_data:
+  enabled: false
+  files: []
+
+# -----------------------------------------------------------------------------
+# SSP Model Configuration
+# -----------------------------------------------------------------------------
+ssp_model:
+  type: "fsps"
+  imf: "kroupa"
+  dust_model: "calzetti"
+  distance_mpc: 100.0
+  redshift: 0.5
+
+# -----------------------------------------------------------------------------
+# Fitting Configuration
+# -----------------------------------------------------------------------------
+fitting:
+  method: "mcmc"
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass: [8, 12]
+    age: [0.001, 10.0]
+    metallicity: [-2.0, 0.5]
+    dust: [0.0, 2.0]
+  error_floor: 0.10
+
+# -----------------------------------------------------------------------------
+# MCMC Configuration
+# -----------------------------------------------------------------------------
+mcmc:
+  n_walkers: 32
+  n_steps: 1000
+  n_burnin: 300
+  thin: 5
+  n_threads: 4
+
+# -----------------------------------------------------------------------------
+# Output Configuration
+# -----------------------------------------------------------------------------
+plotting:
+  output_dir: "/Users/snehanair/Downloads/out/rubin_results"
+  formats: [png, pdf]
+
+output:
+  save_photometry: true
+  save_samples: true
+  photometry_format: "csv"
