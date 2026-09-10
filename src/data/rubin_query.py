@@ -184,6 +184,34 @@ class RubinDataQuery:
         
         print(f"[RUBIN QUERY] Found {len(df)} object(s)")
         return df
+
+    def cone_search(self, ra: float, dec: float, radius_arcsec: float = 10.0,
+                    catalog: str = None, flux_type: str = None,
+                    bands: List[str] = None, max_objects: int = None) -> List:
+        """Query a Rubin cone and return pipeline-ready photometry datasets."""
+        max_rows = max_objects or 1000
+        df = self.query_region(
+            ra=ra,
+            dec=dec,
+            radius_arcsec=radius_arcsec,
+            catalog=catalog,
+            max_rows=max_rows,
+        )
+
+        datasets = []
+        for _, row in df.iterrows():
+            row_df = row.to_frame().T
+            phot_data = self.extract_photometry(
+                row_df,
+                flux_type=flux_type,
+                bands=bands,
+            )
+            object_id = phot_data.get('rubin_object_id')
+            if object_id is None:
+                object_id = len(datasets)
+            datasets.append((f"rubin_{object_id}", phot_data))
+
+        return datasets
     
     def extract_photometry(self, df: pd.DataFrame, 
                           flux_type: str = None,
