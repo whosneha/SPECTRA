@@ -57,16 +57,16 @@ output:
 - `mcmc`: walker count, chain length, burn-in, thinning
 - `output`: whether to save photometry tables and samples
 
-## Local-file example
+## Local bundled-data example
 
 ```yaml
 input:
-  type: csv
-  filepath: data/example_photometry.csv
+  type: fornax_csv
+  filepath: data/fornax_gc_photometry.csv
 
 ssp_model:
   type: fsps
-  redshift: 0.05
+  redshift: 0.00032
   imf: chabrier
 
 fitting:
@@ -79,7 +79,7 @@ fitting:
     dust: [0.0, 2.0]
 
 plotting:
-  output_dir: outputs/example_csv
+  output_dir: outputs/fornax_example
   formats: [png]
 ```
 

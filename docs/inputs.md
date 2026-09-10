@@ -32,7 +32,7 @@ rubin:
 ```yaml
 input:
   type: csv
-  filepath: data/example_photometry.csv
+  filepath: /path/to/local_photometry.csv
 ```
 
 `csv` and `dat` loaders expect wavelength and flux columns. For generic CSVs, the loader looks for common names such as `wavelength`, `flux`, `flux_err`, `obs_flux`, and `obs_err`.

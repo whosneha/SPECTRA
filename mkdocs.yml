@@ -56,3 +56,6 @@ nav:
       - Gallery: examples/gallery.md
   - Development:
       - Testing: testing-guide.md
+  - Legacy:
+      - Intro: intro.md
+      - Installation Reference: installation.md

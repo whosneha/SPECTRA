@@ -14,10 +14,12 @@ spectra --config example_configs/config_dp02_test.yaml --method ml
 
 ## Notebook workflow
 
-Open `notebooks/SPECTRA_RSP_Tutorial.ipynb` and run the cells in order. The notebook:
+For a short smoke test, open `notebooks/SPECTRA_DP02_Smoke_Test.ipynb` and run the cells in order. For the longer Rubin Science Platform workflow, use `notebooks/SPECTRA_RSP_Tutorial.ipynb`.
+
+The smoke-test notebook:
 
 - prompts for `RSP_TOKEN` if it is not already present
-- writes a small DP0.2 cone-search config
+- copies the curated DP0.2 cone-search config into a notebook-local run config
 - runs `main(config_path)`
 - reads back `fit_summary.csv`
 
