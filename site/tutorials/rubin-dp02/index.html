@@ -1712,10 +1712,10 @@
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>spectra<span class="w"> </span>--config<span class="w"> </span>example_configs/config_dp02_test.yaml<span class="w"> </span>--method<span class="w"> </span>ml
 </code></pre></div>
 <h2 id="notebook-workflow">Notebook workflow</h2>
-<p>For a short smoke test, open <code>notebooks/SPECTRA_DP02_Smoke_Test.ipynb</code> and run the cells in order. For the longer Rubin Science Platform workflow, use <code>notebooks/SPECTRA_RSP_Tutorial.ipynb</code>.</p>
+<p>For a short smoke test run directly on the Rubin Science Platform, open <code>notebooks/SPECTRA_DP02_Smoke_Test.ipynb</code> and run the cells in order. For the longer Rubin Science Platform workflow, use <code>notebooks/SPECTRA_RSP_Tutorial.ipynb</code>.</p>
 <p>The smoke-test notebook:</p>
 <ul>
-<li>prompts for <code>RSP_TOKEN</code> if it is not already present</li>
+<li>reuses the token and TAP endpoint provided by the active RSP notebook environment</li>
 <li>copies the curated DP0.2 cone-search config into a notebook-local run config</li>
 <li>runs <code>main(config_path)</code></li>
 <li>reads back <code>fit_summary.csv</code></li>
