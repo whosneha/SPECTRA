@@ -5,7 +5,7 @@
 `ml` is fast and useful for configuration checks and large batches.
 
 ```bash
-./bin/spectra --config config.yaml --method ml
+./bin/spectra --config example_configs/config_dp02_test.yaml --method ml
 ```
 
 ## MCMC mode
@@ -13,7 +13,7 @@
 `mcmc` returns posterior-driven uncertainty estimates and diagnostic plots.
 
 ```bash
-./bin/spectra --config config.yaml --method mcmc
+./bin/spectra --config example_configs/config_dp02_test.yaml --method mcmc
 ```
 
 ## Practical recommendation

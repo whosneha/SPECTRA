@@ -1,64 +1,43 @@
 # Input Formats
 
-## Multi-Wavelength Workflows
+## Rubin inputs
 
-**Primary use case**: Combine Rubin optical photometry with external UV/NIR/mid-IR sources.
+SPECTRA supports five Rubin entry points:
 
-### Simple approach: Rubin + local files
+- `rubin_id`: one object ID
+- `rubin_tap`: one coordinate target, choosing the brightest match when several are returned
+- `rubin_batch_ids`: explicit list of Rubin object IDs in the YAML
+- `rubin_cone_search`: a region query that returns multiple objects
+- `rubin_from_csv`: object IDs loaded from a local CSV
 
-```yaml
-input:
-  type: rubin_tap
-  query: "SELECT * FROM dp02.PhotoObj ..."
-
-additional_data:
-  enabled: true
-  files:
-    - path: data/galex_fuv_nuv.csv      # UV: 2 bands
-      format: csv
-    - path: data/allwise_w1_w2.csv      # Mid-IR: 2 bands
-      format: csv
-```
-
-Result: Rubin 6 optical bands + GALEX 2 UV bands + AllWise 2 mid-IR bands = 10 bands total.
-
-### Advanced: Query external catalogs automatically
+Example:
 
 ```yaml
 input:
   type: rubin_cone_search
-  ra: 150.5
-  dec: 2.3
-  radius_arcmin: 0.5
+  ra: 62.0
+  dec: -37.0
+  radius_arcsec: 30.0
+  max_objects: 5
 
-external_sources:
-  enabled: true
-  sources: [galex, allwise, vista]  # Auto-query
-  radius_arcsec: 3.0
+rubin:
+  rsp_token: null
+  catalog: dp02_dc2_catalogs.Object
+  flux_type: cModelFlux
+  bands: [u, g, r, i, z, y]
 ```
 
-Result: Rubin (6 bands) + GALEX (2 UV) + AllWise (4 mid-IR) + VISTA (5 NIR) = 17 bands.
-
----
-
-## fornax_csv
-
-Use long-format Fornax CSV files.
-
-Required columns include:
-
-- `object_id`, `band`, `wavelength_um`
-- `flux_nJy`, `flux_err_nJy`
-- `mag_AB`, `mag_err`
-- `ra_deg`, `dec_deg`, `aperture_arcsec`, `redshift`
+## Local single-file inputs
 
 ```yaml
 input:
-  type: fornax_csv
-  filepath: data/fornax_gc_photometry.csv
+  type: csv
+  filepath: data/example_photometry.csv
 ```
 
-## phangs_fits
+`csv` and `dat` loaders expect wavelength and flux columns. For generic CSVs, the loader looks for common names such as `wavelength`, `flux`, `flux_err`, `obs_flux`, and `obs_err`.
+
+## PHANGS and Fornax loaders
 
 ```yaml
 input:
@@ -67,7 +46,13 @@ input:
   max_rows: 10
 ```
 
-## fits_batch
+```yaml
+input:
+  type: fornax_csv
+  filepath: data/fornax_gc_photometry.csv
+```
+
+## FITS batch mode
 
 ```yaml
 input:
@@ -77,20 +62,16 @@ input:
   max_rows_per_file: 20
 ```
 
-## rubin modes
+## Supplemental data
 
-- `rubin_id`
-- `rubin_tap`
-- `rubin_batch_ids`
-- `rubin_cone_search`
-- `rubin_from_csv`
-
-These require a Rubin token in config or environment.
-
-## local single-file modes
+To merge local files with a primary input:
 
 ```yaml
-input:
-  type: csv   # or dat or fits
-  filepath: /path/to/file.csv
+additional_data:
+  enabled: true
+  files:
+    - path: data/jwst_nircam.csv
+      format: csv
 ```
+
+To augment coordinate-bearing inputs with external catalogs, use `external_sources`; see [External Sources](user-guide/external-sources.md).

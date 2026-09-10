@@ -1,6 +1,55 @@
-# ...existing code...
+# Python cache / test output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local bulky workspaces / vendored dependencies
+demo/
+fsps/
+overleaf_workplan/
+
+# Local editor / OS files
+.DS_Store
+.venv/
+.ipynb_checkpoints/
+
+# Local config experiments
+config.yaml
+config_*.yaml
+config.local.yaml
+config_*.local.yaml
+example_configs/*.yaml
+!example_configs/config_dp02_test.yaml
+!example_configs/config_phangs.yaml
+!example_configs/config_single_fits.yaml
+
+# Local datasets; keep only small curated fixtures in the repository
+data/*
+!data/fornax_gc_photometry.csv
+
+# Generated science outputs
+outputs/
+*.h5
+*.png
+*.pdf
+*.svg
+
+# BC03 preprocessed cache files (large binary, generated locally)
+# Run: python -m src.utils.bc03_preprocess --data-dir <path> --imf <imf> --resolution <res>
+src/data/*.npz
+src/data/bc03_*_clean_grid.npz
 
 # Secrets — NEVER commit these
 .env
 *.token
 *_token.txt
+
+# Rubin / notebook scratch files
+rsp_config.yaml
+notebooks/.ipynb_checkpoints/

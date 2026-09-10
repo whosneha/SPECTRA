@@ -1,28 +1,19 @@
 # SPECTRA Documentation
 
-SPECTRA is a Python pipeline for fitting spectral energy distributions (SEDs) from multi-band photometry.
-
-## Main Use Case
-
-**Rubin/LSST multi-wavelength SED fitting** -- Combine Rubin optical photometry with external sources (GALEX UV, AllWise mid-IR, VISTA near-IR, future missions like Euclid and Roman) to fit galaxy and star cluster SEDs across wavelengths from UV to mid-IR, suitable for z < 1 objects.
-
-## What SPECTRA supports
-
-- **Rubin data sources**: Direct TAP queries, single object by ID, cone searches, batch from CSV
-- **External catalogs**: GALEX (UV), AllWise (mid-IR), VISTA (near-IR), Euclid, Roman
-- **File inputs**: CSV, DAT, FITS (single or batch), with optional local supplemental files
-- **Catalog loaders**: PHANGS-HST FITS and Fornax GC CSV
-- **Fitting modes**: Maximum-likelihood (fast, seconds) and MCMC (full posteriors, minutes)
-- **Batch processing** and per-object output folders
+SPECTRA fits broadband photometry with SSP-based models and writes both science plots and tabular summaries. The most reliable Rubin path in this repository is the DP0.2/DC2 object catalog, accessed through the Rubin Science Platform token flow used by `src/data/rubin_query.py`.
 
 ## Start here
 
-1. Installation: [Getting Started / Installation](getting-started/installation.md)
-2. First run: [Getting Started / Quick Start](getting-started/quickstart.md)
-3. Config basics: [Getting Started / Configuration](getting-started/configuration.md)
+1. [Installation](getting-started/installation.md)
+2. [Quick Start](getting-started/quickstart.md)
+3. [Configuration Basics](getting-started/configuration.md)
+4. [Rubin DP0.2 Tutorial](tutorials/rubin-dp02.md)
 
 ## Core references
 
-- Inputs: [Input Formats](inputs.md)
-- Config keys: [Configuration Reference](configuration.md)
-- Outputs: [Outputs](outputs.md)
+- [Input Formats](inputs.md)
+- [Configuration Reference](configuration.md)
+- [Outputs](outputs.md)
+- [Data Loaders](user-guide/data-loaders.md)
+- [External Sources](user-guide/external-sources.md)
+- [MCMC Guide](user-guide/mcmc.md)

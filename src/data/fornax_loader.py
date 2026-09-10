@@ -51,7 +51,9 @@ def load_fornax_csv(filepath):
             'aperture_arcsec':  float(group['aperture_arcsec'].iloc[0]),
             'redshift':         float(group['redshift'].iloc[0]),
             'bands':            list(group['band']),
-            'wavelength':       group['wavelength_um'].to_numpy(dtype=float),
+            # Convert μm → Å to match the rest of the pipeline (PHANGS loader,
+            # SSP model, plotting all expect wavelength in Angstroms internally)
+            'wavelength':       group['wavelength_um'].to_numpy(dtype=float) * 1e4,
             'obs_flux':         group['flux_nJy'].to_numpy(dtype=float) * NJY_TO_JY,
             'obs_err':          group['flux_err_nJy'].to_numpy(dtype=float) * NJY_TO_JY,
             'mag_AB':           group['mag_AB'].to_numpy(dtype=float),

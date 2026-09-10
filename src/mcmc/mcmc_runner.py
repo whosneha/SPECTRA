@@ -2,6 +2,12 @@ import numpy as np
 import emcee
 from multiprocessing import Pool
 
+# Module-level flag so a configured random_seed is applied only once per
+# Python process. Without this, every object in a batch run would re-seed
+# the RNG, producing identical walker chains across objects.
+_GLOBAL_SEED_USED = False
+
+
 class MCMCRunner:
     """Run MCMC fitting using emcee."""
     
@@ -20,7 +26,7 @@ class MCMCRunner:
         
         self.n_walkers = self.config.get('n_walkers', 32)
         self.n_steps = self.config.get('n_steps', 1000)
-        self.n_burnin = self.config.get('n_burnin', 300)
+        self.n_burnin = self.config.get('n_burnin', self.config.get('burn_in', 300))
         self.n_threads = self.config.get('n_threads', 1)
         self.thin = self.config.get('thin', 1)  # Thinning factor
         self.random_seed = self.config.get('random_seed', None)
@@ -79,17 +85,44 @@ class MCMCRunner:
         # Initialize walker positions spread across the prior volume
         # Use Latin hypercube-like initialization for better coverage
         if self.random_seed is not None:
-            np.random.seed(int(self.random_seed))
+            # Seed once on first call so the full multi-object batch is
+            # reproducible, but DON'T reset on every object — otherwise every
+            # object in the batch gets the same walker positions and proposal
+            # sequence, producing identical fits when the data is weak.
+            global _GLOBAL_SEED_USED
+            if not _GLOBAL_SEED_USED:
+                np.random.seed(int(self.random_seed))
+                _GLOBAL_SEED_USED = True
 
         p0_base = np.array([initial_params[p] for p in param_names])
         n_dim = len(param_names)
-        
-        # Spread walkers more broadly across prior space
+
+        # Optional warm-start: if config provides 'walker_init.center' (a dict
+        # of param -> value) we initialize all walkers in a tight Gaussian ball
+        # around it. Useful for reproducible demos / multi-modal posteriors.
+        wi = self.config.get('walker_init', None)
         pos = np.zeros((self.n_walkers, n_dim))
-        for i, (pmin, pmax) in enumerate(bounds):
-            # Use uniform distribution across 20%-80% of prior range
-            prior_range = pmax - pmin
-            pos[:, i] = pmin + 0.2 * prior_range + 0.6 * prior_range * np.random.rand(self.n_walkers)
+        if wi is not None and 'center' in wi:
+            center = wi['center']
+            scatter = float(wi.get('scatter', 0.02))  # fraction of prior range
+            for i, (pmin, pmax) in enumerate(bounds):
+                pname = param_names[i]
+                if pname in center:
+                    c = float(center[pname])
+                else:
+                    c = (pmin + pmax) / 2.0
+                sigma = scatter * (pmax - pmin)
+                pos[:, i] = np.clip(
+                    c + sigma * np.random.randn(self.n_walkers),
+                    pmin, pmax,
+                )
+            print(f"[MCMC] Warm-start: walkers init around {center} (scatter={scatter})")
+        else:
+            # Spread walkers more broadly across prior space
+            for i, (pmin, pmax) in enumerate(bounds):
+                # Use uniform distribution across 20%-80% of prior range
+                prior_range = pmax - pmin
+                pos[:, i] = pmin + 0.2 * prior_range + 0.6 * prior_range * np.random.rand(self.n_walkers)
         
         print(f"Running MCMC with {self.n_walkers} walkers for {self.n_steps} steps...")
         print(f"Burn-in: {self.n_burnin} steps, Thinning: {self.thin}")

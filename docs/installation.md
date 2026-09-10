@@ -1,12 +1,3 @@
 # Installation (Reference)
 
-For the recommended setup steps, use [Getting Started / Installation](getting-started/installation.md).
-
-Quick command set:
-
-```bash
-git clone https://github.com/whosneha/SPECTRA.git
-cd SPECTRA
-pip install -r requirements.txt
-./bin/spectra --help
-```
+This page mirrors the main install guide for the legacy docs layout. Use [Getting Started / Installation](getting-started/installation.md) for the maintained version.

@@ -1,63 +1,30 @@
 # Quick Start
 
-## Primary Use Case: Rubin + External Sources
-
-The recommended workflow combines **Rubin optical photometry with external UV/NIR/mid-IR sources**:
-
-### Example: Rubin + GALEX multi-wavelength
+## Fast local smoke test
 
 ```bash
-# 1. Validate config
-./bin/spectra --config example_configs/config_rubin_galex.yaml --validate
-
-# 2. Run ML fit (fast, ~seconds)
-./bin/spectra --config example_configs/config_rubin_galex.yaml --max-rows 10 --method ml
-
-# 3. Inspect outputs
-ls outputs/rubin_galex/
+export PATH="$PWD/bin:$PATH"
+spectra --config example_configs/config_phangs.yaml --max-rows 1 --method ml
 ```
 
-This query Rubin optical bands + GALEX UV → full SED from 0.15–0.97 μm.
+This is the quickest way to confirm the pipeline, plotting, and output writing all work in your environment.
 
----
-
-## Alternative Examples
-
-### PHANGS-HST star cluster fitting
+## Rubin DP0.2 test run
 
 ```bash
-./bin/spectra --config example_configs/config_phangs.yaml --max-rows 1 --method ml
+export PATH="$PWD/bin:$PATH"
+export RSP_TOKEN="your_rsp_token"
+
+spectra --validate --config example_configs/config_dp02_test.yaml
+spectra --config example_configs/config_dp02_test.yaml --method ml
 ```
 
-### Fornax globular cluster CSV
+That config performs a small cone search in the DP0.2/DC2 field and fits a few bright sources using Rubin `cModelFlux` photometry.
+
+## MCMC follow-up
 
 ```bash
-./bin/spectra --config example_configs/config_phangs.yaml --validate
-./bin/spectra --config config_fornax.yaml --method ml
+spectra --config example_configs/config_dp02_test.yaml --method mcmc
 ```
 
-### Using Python entry point
-
-```bash
-python run.py example_configs/config_rubin_galex.yaml
-```
-
----
-
-## Get Full Posteriors with MCMC
-
-```bash
-./bin/spectra --config example_configs/config_rubin_galex.yaml --max-rows 10 --method mcmc
-```
-
-(Takes ~2 min per object; see [MCMC Guide](../user-guide/mcmc.md) for details)
-
----
-
-## Results
-
-Outputs are written to your configured output directory:
-- `outputs/rubin_galex/` – SED plots, parameter tables, diagnostics
-- One subfolder per object with `sed.pdf`, `results.csv`, corner plots, etc.
-
-See [Outputs](../outputs.md) for full details.
+Use MCMC once the ML workflow is behaving well. The posterior products are described in [MCMC Guide](../user-guide/mcmc.md).

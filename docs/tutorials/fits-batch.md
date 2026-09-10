@@ -29,7 +29,7 @@ plotting:
 ## Run
 
 ```bash
-./bin/spectra --config config.yaml
+./bin/spectra --config example_configs/config_single_fits.yaml
 ```
 
 ## Validate run products

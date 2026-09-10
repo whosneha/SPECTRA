@@ -49,6 +49,7 @@ nav:
       - Science Use Cases: user-guide/science-use-cases.md
   - Tutorial:
       - FITS Batch: tutorials/fits-batch.md
+      - Rubin DP0.2: tutorials/rubin-dp02.md
   - API:
       - Main Pipeline: api/main.md
   - Examples:

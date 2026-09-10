@@ -415,6 +415,13 @@ class ExternalPhotometryQuery:
 
 class ExternalDataCombiner:
     """Combine external photometry with primary data sources."""
+
+    @staticmethod
+    def _get_flux_arrays(data):
+        """Support both internal SPECTRA schema and external query schema."""
+        if 'obs_flux' in data and 'obs_err' in data:
+            return np.array(data['obs_flux']), np.array(data['obs_err'])
+        return np.array(data['flux']), np.array(data['flux_err'])
     
     @staticmethod
     def combine_with_external(primary_data, external_data, 
@@ -442,12 +449,10 @@ class ExternalDataCombiner:
             return primary_data
         
         primary_wave = np.array(primary_data['wavelength'])
-        primary_flux = np.array(primary_data['flux'])
-        primary_err = np.array(primary_data['flux_err'])
+        primary_flux, primary_err = ExternalDataCombiner._get_flux_arrays(primary_data)
         
         external_wave = np.array(external_data['wavelength'])
-        external_flux = np.array(external_data['flux'])
-        external_err = np.array(external_data['flux_err'])
+        external_flux, external_err = ExternalDataCombiner._get_flux_arrays(external_data)
         
         # Check for overlapping bands
         combined_wave = []
@@ -488,10 +493,15 @@ class ExternalDataCombiner:
         
         result = {
             'wavelength': np.array(combined_wave)[sort_idx],
-            'flux': np.array(combined_flux)[sort_idx],
-            'flux_err': np.array(combined_err)[sort_idx],
+            'obs_flux': np.array(combined_flux)[sort_idx],
+            'obs_err': np.array(combined_err)[sort_idx],
+            'mod_flux': np.zeros(len(combined_wave)),
             'source': np.array(combined_source)[sort_idx]
         }
+
+        for key in ['object_id', 'ra', 'dec', 'redshift', 'bands']:
+            if key in primary_data:
+                result[key] = primary_data[key]
         
         print(f"[COMBINE] Primary: {len(primary_wave)} bands, "
               f"External: {len(external_wave)} bands, "

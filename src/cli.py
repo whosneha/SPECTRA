@@ -10,15 +10,189 @@ Usage:
 import argparse
 import sys
 import os
+import shutil
+import tarfile
+import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 
-# Import from src.main directly (no package structure needed)
+# Import from src.main lazily in main() to keep lightweight commands
+# (e.g. `spectra setup ...`) free of unnecessary dependency imports.
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.main import main as run_pipeline
+
+
+def _bc03_required_files(imf, resolution):
+    """Return required BC03 file names for IMF/resolution."""
+    imf_tag = {
+        "salpeter": "salp",
+        "chabrier": "chab",
+        "kroupa": "krou",
+    }[imf]
+    met_tags = ["m22", "m32", "m42", "m52", "m62", "m72"]
+    return [f"bc2003_{resolution}_{m}_{imf_tag}_ssp.ised_ASCII" for m in met_tags]
+
+
+def _download_and_extract_archive(url, target_dir):
+    """Download an archive and extract it into target_dir."""
+    with tempfile.TemporaryDirectory(prefix="spectra_bc03_") as tmpdir:
+        archive_path = os.path.join(tmpdir, "bc03_download")
+        print(f"[SETUP] Downloading BC03 archive from: {url}")
+        urllib.request.urlretrieve(url, archive_path)
+
+        print(f"[SETUP] Extracting archive into: {target_dir}")
+        # Try tar first, then zip
+        try:
+            with tarfile.open(archive_path, "r:*") as tf:
+                tf.extractall(target_dir)
+                return
+        except tarfile.TarError:
+            pass
+
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                zf.extractall(target_dir)
+                return
+        except zipfile.BadZipFile as e:
+            raise ValueError(
+                "Downloaded file is neither a tar archive nor a zip archive. "
+                "Provide a valid archive URL."
+            ) from e
+
+
+def _stage_bc03_files(target_dir, required_files):
+    """Ensure required files exist in target_dir root, staging from subdirs when needed."""
+    staged = []
+    for filename in required_files:
+        direct_path = os.path.join(target_dir, filename)
+        if os.path.isfile(direct_path):
+            continue
+
+        matches = list(Path(target_dir).rglob(filename))
+        if not matches:
+            continue
+
+        src_path = str(matches[0])
+        try:
+            os.symlink(src_path, direct_path)
+        except OSError:
+            # Symlink may fail on some filesystems; fall back to copying.
+            shutil.copy2(src_path, direct_path)
+        staged.append(filename)
+
+    return staged
+
+
+def _validate_bc03_dir(target_dir, imf, resolution):
+    """Validate that required BC03 files are present for selected IMF/resolution."""
+    required_files = _bc03_required_files(imf, resolution)
+    staged = _stage_bc03_files(target_dir, required_files)
+    missing = [f for f in required_files if not os.path.isfile(os.path.join(target_dir, f))]
+    return required_files, staged, missing
+
+
+def _handle_setup_bc03(args):
+    """Handle `spectra setup bc03` command."""
+    target_dir = os.path.abspath(os.path.expanduser(args.dir))
+    os.makedirs(target_dir, exist_ok=True)
+    print(f"[SETUP] BC03 target directory: {target_dir}")
+
+    if args.download_url:
+        try:
+            _download_and_extract_archive(args.download_url, target_dir)
+        except Exception as e:
+            print(f"ERROR: BC03 download/extract failed: {e}", file=sys.stderr)
+            return 1
+    else:
+        print("[SETUP] No download URL provided; running validation-only mode.")
+
+    required_files, staged, missing = _validate_bc03_dir(
+        target_dir, args.imf, args.resolution
+    )
+
+    if staged:
+        print(f"[SETUP] Staged {len(staged)} file(s) from nested directories into root.")
+
+    print("\n[SETUP] Expected BC03 files:")
+    for f in required_files:
+        status = "found" if f not in missing else "missing"
+        print(f"  [{status}] {f}")
+
+    if missing:
+        print("\nBC03 setup incomplete: missing required files.", file=sys.stderr)
+        print("\nHow to complete setup:")
+        print("  1) Download the official BC03 grid archive from your approved source.")
+        print(f"  2) Place/extract files into: {target_dir}")
+        print("  3) Re-run: spectra setup bc03 --dir \"{}\" --imf {} --resolution {}".format(
+            target_dir, args.imf, args.resolution
+        ))
+        return 2
+
+    print("\n[SUCCESS] BC03 setup complete.")
+    print("\nUse one of these configuration options:")
+    print(f"  - Config YAML: ssp_model.bc03_data_dir: {target_dir}")
+    print(f"  - Environment: export BC03_DATA_DIR=\"{target_dir}\"")
+    return 0
+
+
+def _handle_setup_command(argv):
+    """Handle `spectra setup ...` command family."""
+    parser = argparse.ArgumentParser(
+        prog="spectra setup",
+        description="Setup helpers for optional external dependencies",
+    )
+    subparsers = parser.add_subparsers(dest="setup_target")
+
+    bc03 = subparsers.add_parser(
+        "bc03",
+        help="Setup and validate BC03 grid files",
+        description=(
+            "Prepare BC03 grids in a local directory and validate required files. "
+            "This command can optionally download and extract an archive if a URL "
+            "is provided."
+        ),
+    )
+    bc03.add_argument(
+        "--dir",
+        type=str,
+        default="~/.spectra/bc03",
+        help="Target directory for BC03 files (default: ~/.spectra/bc03)",
+    )
+    bc03.add_argument(
+        "--imf",
+        type=str,
+        choices=["chabrier", "kroupa", "salpeter"],
+        default="chabrier",
+        help="IMF family to validate (default: chabrier)",
+    )
+    bc03.add_argument(
+        "--resolution",
+        type=str,
+        choices=["lr", "hr"],
+        default="lr",
+        help="BC03 grid resolution to validate (default: lr)",
+    )
+    bc03.add_argument(
+        "--download-url",
+        type=str,
+        default=None,
+        help="Optional archive URL to download and extract before validation",
+    )
+
+    args = parser.parse_args(argv)
+    if args.setup_target == "bc03":
+        return _handle_setup_bc03(args)
+
+    parser.print_help()
+    return 1
 
 
 def main():
     """Main CLI entry point."""
+    # Setup command family, e.g. `spectra setup bc03 ...`
+    if len(sys.argv) > 1 and sys.argv[1] == "setup":
+        return _handle_setup_command(sys.argv[2:])
+
     parser = argparse.ArgumentParser(
         prog="spectra",
         description="SPECTRA: Stellar Population SED Fitter for Rubin/LSST and multi-wavelength data",
@@ -41,9 +215,9 @@ Configuration File Structure:
   See example configs in the repository:
     - config_rubin.yaml    (Rubin/LSST TAP queries)
     - config_phangs.yaml   (PHANGS-HST cluster catalogs)
-    - config_fornax.yaml   (Fornax GC photometry)
+    - example_configs/config_dp02_test.yaml   (Rubin DP0.2 cone search)
   
-For detailed documentation: https://github.com/yourusername/SPECTRA
+For detailed documentation: https://github.com/whosneha/SPECTRA
         """
     )
     
@@ -151,6 +325,7 @@ For detailed documentation: https://github.com/yourusername/SPECTRA
     print(f"{'='*70}\n")
     
     try:
+        from src.main import main as run_pipeline
         run_pipeline(config_path)
         return 0
     except Exception as e:
@@ -239,7 +414,7 @@ def create_temp_rubin_config(rubin_id, token, output_dir):
             "output_dir": output_dir or f"outputs/rubin_{rubin_id}",
             "show_plots": False,
             "save_plots": True,
-            "plot_format": "png",
+            "formats": ["png"],
             "dpi": 150,
         },
         "output": {
@@ -283,8 +458,21 @@ def validate_config(config_path):
             print("✗ input.type is required")
             return 1
         
-        valid_types = ["rubin_id", "rubin_tap", "phangs_fits", "fornax_csv", 
-                       "fits", "dat", "csv", "file_list", "fits_batch"]
+        valid_types = [
+            "rubin_id",
+            "rubin_tap",
+            "rubin_batch_ids",
+            "rubin_cone_search",
+            "rubin_from_csv",
+            "phangs_fits",
+            "fornax_csv",
+            "fits",
+            "dat",
+            "csv",
+            "file",
+            "file_list",
+            "fits_batch",
+        ]
         if input_type not in valid_types:
             print(f"✗ Unknown input.type: {input_type}")
             print(f"   Valid types: {', '.join(valid_types)}")
@@ -302,7 +490,38 @@ def validate_config(config_path):
                     print("✗ rubin.rsp_token required or set RSP_TOKEN env variable")
                     return 1
         
-        elif input_type in ["phangs_fits", "fornax_csv", "fits", "dat", "csv"]:
+        elif input_type == "rubin_tap":
+            if "ra" not in config["input"] or "dec" not in config["input"]:
+                print("✗ input.ra and input.dec are required for rubin_tap type")
+                return 1
+            if "rubin" not in config or "rsp_token" not in config["rubin"]:
+                if "RSP_TOKEN" not in os.environ:
+                    print("✗ rubin.rsp_token required or set RSP_TOKEN env variable")
+                    return 1
+
+        elif input_type == "rubin_batch_ids":
+            rubin_ids = config["input"].get("rubin_ids", [])
+            if not rubin_ids:
+                print("✗ input.rubin_ids must contain at least one Rubin object ID")
+                return 1
+
+        elif input_type == "rubin_cone_search":
+            if "ra" not in config["input"] or "dec" not in config["input"]:
+                print("✗ input.ra and input.dec are required for rubin_cone_search")
+                return 1
+
+        elif input_type == "rubin_from_csv":
+            if "filepath" not in config["input"]:
+                print("✗ input.filepath is required for rubin_from_csv")
+                return 1
+            filepath = config["input"]["filepath"]
+            if not os.path.exists(filepath):
+                print(f"✗ File not found: {filepath}")
+                return 1
+            if "id_column" not in config["input"]:
+                print("✗ input.id_column is recommended for rubin_from_csv")
+
+        elif input_type in ["phangs_fits", "fornax_csv", "fits", "dat", "csv", "file"]:
             if "filepath" not in config["input"]:
                 print(f"✗ input.filepath is required for {input_type} type")
                 return 1

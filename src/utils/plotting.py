@@ -15,7 +15,13 @@ class Plotting:
             config: Dict with output_dir and customization options
         """
         self.output_dir = config.get('output_dir', './results')
-        self.formats = config.get('formats', ['png'])
+        legacy_plot_format = config.get('plot_format')
+        if 'formats' in config:
+            self.formats = config['formats']
+        elif legacy_plot_format:
+            self.formats = [legacy_plot_format]
+        else:
+            self.formats = ['png']
         os.makedirs(self.output_dir, exist_ok=True)
         
         # ── Plot Customization ──
@@ -30,6 +36,17 @@ class Plotting:
         # Wavelength/flux units
         self.wavelength_units = config.get('wavelength_units', 'micron')
         self.flux_units = config.get('flux_units', 'jy')
+
+        # Optional explicit x-axis range for SED plots, in microns: [min, max].
+        # When set, overrides the data-driven auto x-limits so the model rise/fall
+        # is visible even when photometry covers a narrow band.
+        wr = config.get('wavelength_range', None)
+        self.wavelength_range = tuple(wr) if wr is not None else None
+
+        # Optional explicit y-axis range for SED plots, in Jy: [min, max].
+        # When set, overrides the data-driven auto y-limits.
+        fr = config.get('flux_range', None)
+        self.flux_range = tuple(fr) if fr is not None else None
         
         # Color scheme
         color_scheme = config.get('color_scheme', {})
@@ -90,19 +107,35 @@ class Plotting:
         mod_flux = results['mod_flux']
         object_id = phot_data.get('object_id', 'unknown')
         redshift = phot_data.get('redshift', ssp_model.redshift if ssp_model else 0.0)
-        
+
+        # CIGALE-style overrides: orange/blue/dark-red colors, mJy units,
+        # "Best model" title, relative residual panel.
+        is_cigale = (self.plot_style == 'cigale')
+        flux_scale = 1000.0 if is_cigale else 1.0
+        flux_units_label = r'$S_\nu$ [mJy]' if is_cigale else r'$F_\nu$ [Jy]'
+
         wavelength_um = wavelength / 1e4
-        
+
         # Detect narrow-range spectroscopic data vs broadband photometry
         wav_ratio = wavelength_um.max() / wavelength_um.min()
         is_narrow = wav_ratio < 1.5  # less than 0.18 dex span
+        # In CIGALE-style mode, dense narrow-range data is rendered as a
+        # continuous "Observed spectrum" line (gray) AND binned into a few
+        # synthetic photometry points (red circles + black X) — matching the
+        # appearance of CIGALE's diagnostic plots. The x-axis stays log.
+        treat_as_spectrum = bool(is_cigale and is_narrow and len(wavelength_um) >= 5)
+        if is_cigale:
+            is_narrow = False
         n_points = len(wavelength_um)
         
         if is_narrow:
             print(f"[PLOT] Narrow wavelength range detected (ratio={wav_ratio:.3f}), using linear x-axis")
         
         # Determine plot x-range
-        if is_narrow:
+        if self.wavelength_range is not None:
+            # Explicit user-specified range (in microns)
+            x_min, x_max = float(self.wavelength_range[0]), float(self.wavelength_range[1])
+        elif is_narrow:
             # Linear padding for narrow range
             wav_span = wavelength_um.max() - wavelength_um.min()
             pad = max(wav_span * 0.3, 0.005)  # at least 0.005 μm padding
@@ -127,10 +160,12 @@ class Plotting:
                 if is_narrow:
                     wav_smooth_aa = np.linspace(x_min * 1e4, x_max * 1e4, 200)
                 else:
+                    # High resolution so narrow UV features (Lyman series,
+                    # 2175 Å bump, etc.) are visible in the rendered curve.
                     wav_smooth_aa = np.logspace(
                         np.log10(x_min * 1e4),
                         np.log10(x_max * 1e4),
-                        500
+                        4000
                     )
                 
                 params = results['parameters']
@@ -161,22 +196,65 @@ class Plotting:
             ax_res = fig.add_subplot(gs[1], sharex=ax_sed)
         else:
             fig, ax_sed = plt.subplots(figsize=self.figure_size)
-        
+
+        # Reduced chi^2 (computed once, used in title and parameter box)
+        if 'chi2_red' in results:
+            reduced_chi2 = results['chi2_red']
+        else:
+            chi2 = -2 * results.get('log_likelihood', 0.0)
+            n_data = len(obs_flux)
+            n_params = len(results.get('parameters', {}))
+            reduced_chi2 = chi2 / max(n_data - n_params, 1)
+
         # Title
-        ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.4f})', 
-                        fontsize=14, fontweight='bold')
-        
+        if is_cigale:
+            ax_sed.set_title(
+                f'Best model for {object_id}\n'
+                f'(z={redshift:.2f}, reduced $\\chi^2$={reduced_chi2:.2f})',
+                fontsize=14
+            )
+        else:
+            ax_sed.set_title(f'SED Fit: {object_id} (z = {redshift:.4f})',
+                            fontsize=14, fontweight='bold')
+
+        # CIGALE-style colors
+        if is_cigale:
+            unatt_color = '#1F77FF'      # blue dashed
+            model_color = '#8B0000'      # dark red
+            obs_color   = '#D62728'      # red circles
+            obs_edge    = '#1A1A1A'
+            unatt_label = 'Stellar unattenuated'
+            model_label = 'Modeled spectrum'
+            obs_label   = 'Observed photometric fluxes'
+            mod_phot_color = 'black'
+        else:
+            unatt_color = self.colors['unattenuated']
+            model_color = self.colors['model']
+            obs_color   = self.colors['observed']
+            obs_edge    = '#1A5276'
+            unatt_label = 'Stellar unattenuated'
+            model_label = 'Model spectrum'
+            obs_label   = 'Observed photometry'
+            mod_phot_color = self.colors['model']
+
         # Plot components
         if self.show_components and stellar_unattenuated is not None:
-            ax_sed.plot(smooth_wavelengths_um, stellar_unattenuated, '--', 
-                       linewidth=self.line_width, color=self.colors['unattenuated'],
-                       label='Stellar unattenuated', zorder=1, alpha=0.8)
-        
+            from scipy.ndimage import median_filter as _mf, gaussian_filter1d as _gf1d
+            _unatt_cont = _gf1d(_mf(stellar_unattenuated.astype(float), size=51), sigma=3)
+            ax_sed.plot(smooth_wavelengths_um, _unatt_cont * flux_scale, '--',
+                       linewidth=self.line_width, color=unatt_color,
+                       label=unatt_label, zorder=1, alpha=0.85)
+
         if smooth_spectrum is not None:
-            ax_sed.plot(smooth_wavelengths_um, smooth_spectrum, '-', 
-                       linewidth=self.line_width, color=self.colors['model'],
-                       label='Model spectrum', zorder=2, alpha=0.9)
-        
+            # Show continuum envelope: median filter clips narrow emission-line
+            # spikes (Hα, [O III], Paα …), then a light Gaussian smooths
+            # pixelisation noise.  This matches the CIGALE SED display style.
+            from scipy.ndimage import median_filter as _mf, gaussian_filter1d as _gf1d
+            _cont = _gf1d(_mf(smooth_spectrum.astype(float), size=51), sigma=3)
+            ax_sed.plot(smooth_wavelengths_um, _cont * flux_scale, '-',
+                       linewidth=self.line_width, color=model_color,
+                       label=model_label, zorder=2, alpha=0.95)
+
         # Adjust marker sizes for many-point data
         if n_points > 8:
             obs_ms = max(5, self.marker_size_obs - 4)
@@ -184,24 +262,79 @@ class Plotting:
         else:
             obs_ms = self.marker_size_obs
             mod_ms = self.marker_size_model
-        
-        # Model photometry
-        ax_sed.scatter(wavelength_um, mod_flux, s=mod_ms, marker='s',
-                      facecolor=self.colors['model'], edgecolors='darkred', 
-                      linewidth=1.0, label='Model photometry', zorder=5)
-        
-        # Observed photometry
-        if self.show_error_bars:
-            ax_sed.errorbar(wavelength_um, obs_flux, yerr=obs_err,
-                           fmt='o', markersize=obs_ms, capsize=3, capthick=1.5,
-                           color=self.colors['observed'], ecolor=self.colors['observed'],
-                           elinewidth=1.5, markeredgecolor='#1A5276', markeredgewidth=1.0,
-                           label='Observed photometry', zorder=6)
+
+        if treat_as_spectrum:
+            # CIGALE-style rendering of a spectroscopic .dat file:
+            #   1) Draw the per-pixel observations as a continuous gray
+            #      "Observed spectrum" line (matches CIGALE's gray curve).
+            #   2) Bin into a handful of synthetic photometry points (red
+            #      open circles + black X model markers) so the legend keys
+            #      ("Observed photometric fluxes", "Model photometric fluxes")
+            #      still apply.
+            sort_idx = np.argsort(wavelength_um)
+            wav_sorted   = wavelength_um[sort_idx]
+            obs_sorted   = obs_flux[sort_idx]
+            err_sorted   = obs_err[sort_idx]
+            mod_sorted   = mod_flux[sort_idx]
+
+            ax_sed.plot(wav_sorted, obs_sorted * flux_scale, '-',
+                       color='gray', linewidth=1.4, alpha=0.85,
+                       label='Observed spectrum', zorder=3)
+
+            # Bin into up to 5 equal-width windows
+            n_bins = min(5, max(2, n_points // 3))
+            bin_edges = np.linspace(wav_sorted.min(), wav_sorted.max(), n_bins + 1)
+            bin_wav, bin_obs, bin_err, bin_mod = [], [], [], []
+            for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+                mask = (wav_sorted >= lo) & (wav_sorted <= hi)
+                if not np.any(mask):
+                    continue
+                bin_wav.append(np.mean(wav_sorted[mask]))
+                bin_obs.append(np.mean(obs_sorted[mask]))
+                # Errors combine in quadrature, divided by sqrt(N)
+                bin_err.append(np.sqrt(np.mean(err_sorted[mask] ** 2)) /
+                              np.sqrt(max(np.sum(mask), 1)))
+                bin_mod.append(np.mean(mod_sorted[mask]))
+            bin_wav = np.array(bin_wav)
+            bin_obs = np.array(bin_obs)
+            bin_err = np.array(bin_err)
+            bin_mod = np.array(bin_mod)
+
+            # Model photometric fluxes (black X) at binned wavelengths
+            ax_sed.scatter(bin_wav, bin_mod * flux_scale, s=140,
+                          marker='X', facecolor='black', edgecolors='black',
+                          linewidth=1.0, label='Model photometric fluxes', zorder=5)
+            # Observed photometric fluxes (red open circles + error bars)
+            ax_sed.errorbar(bin_wav, bin_obs * flux_scale, yerr=bin_err * flux_scale,
+                           fmt='o', markersize=10, capsize=3, capthick=1.5,
+                           color=obs_color, ecolor=obs_color,
+                           markerfacecolor='none', markeredgecolor=obs_color,
+                           markeredgewidth=2.0, elinewidth=1.5,
+                           label='Observed photometric fluxes', zorder=6)
         else:
-            ax_sed.scatter(wavelength_um, obs_flux, s=obs_ms**2,
-                          marker='o', facecolor=self.colors['observed'],
-                          edgecolors='#1A5276', linewidth=1.5,
-                          label='Observed photometry', zorder=6)
+            # Default rendering: per-point photometry markers
+            ax_sed.scatter(wavelength_um, mod_flux * flux_scale, s=mod_ms,
+                          marker=('X' if is_cigale else 's'),
+                          facecolor=mod_phot_color,
+                          edgecolors=('black' if is_cigale else 'darkred'),
+                          linewidth=1.0,
+                          label='Model photometric fluxes' if is_cigale else 'Model photometry',
+                          zorder=5)
+            if self.show_error_bars:
+                ax_sed.errorbar(wavelength_um, obs_flux * flux_scale, yerr=obs_err * flux_scale,
+                               fmt='o', markersize=obs_ms, capsize=3, capthick=1.5,
+                               color=obs_color, ecolor=obs_color,
+                               markerfacecolor=('none' if is_cigale else obs_color),
+                               markeredgecolor=(obs_color if is_cigale else obs_edge),
+                               markeredgewidth=(2.0 if is_cigale else 1.0),
+                               elinewidth=1.5,
+                               label=obs_label, zorder=6)
+            else:
+                ax_sed.scatter(wavelength_um, obs_flux * flux_scale, s=obs_ms**2,
+                              marker='o', facecolor=('none' if is_cigale else obs_color),
+                              edgecolors=(obs_color if is_cigale else obs_edge),
+                              linewidth=(2.0 if is_cigale else 1.5),
+                              label=obs_label, zorder=6)
         
         # Set axis scales based on data type
         if is_narrow:
@@ -209,7 +342,7 @@ class Plotting:
         else:
             ax_sed.set_xscale('log')
         ax_sed.set_yscale('log')
-        ax_sed.set_ylabel(r'$F_\nu$ [Jy]', fontsize=14)
+        ax_sed.set_ylabel(flux_units_label, fontsize=14)
         
         # Apply x-limits
         ax_sed.set_xlim(x_min, x_max)
@@ -230,11 +363,21 @@ class Plotting:
                 all_flux = np.concatenate([all_flux, valid_unatt])
         
         all_flux = all_flux[all_flux > 0]
-        y_min = np.min(all_flux) * 0.3
-        y_max = np.max(all_flux) * 5.0
-        ax_sed.set_ylim(y_min, y_max)
-        
-        ax_sed.legend(loc=self.legend_location, frameon=True, fancybox=False,
+        if self.flux_range is not None:
+            # flux_range is interpreted in the *displayed* units (mJy when
+            # plot_style='cigale', Jy otherwise) — i.e. matches the y-axis tick
+            # values the user sees.
+            y_min_disp = float(self.flux_range[0])
+            y_max_disp = float(self.flux_range[1])
+            ax_sed.set_ylim(y_min_disp, y_max_disp)
+        else:
+            y_min = np.min(all_flux) * 0.3
+            y_max = np.max(all_flux) * 5.0
+            ax_sed.set_ylim(y_min * flux_scale, y_max * flux_scale)
+
+        # Legend goes upper-left in CIGALE mode (parameter box is upper-right).
+        legend_loc = 'upper left' if is_cigale else self.legend_location
+        ax_sed.legend(loc=legend_loc, frameon=True, fancybox=False,
                      edgecolor='gray', fontsize=self.legend_fontsize, framealpha=0.95)
         
         if self.show_grid:
@@ -243,16 +386,9 @@ class Plotting:
         if self.show_residuals:
             ax_sed.tick_params(axis='x', which='both', labelbottom=False)
         
-        # Parameter box
+        # Parameter box: shown in BOTH default and CIGALE modes; CIGALE mode
+        # places it in the upper-right (legend goes upper-left).
         if self.show_parameter_box:
-            if 'chi2_red' in results:
-                reduced_chi2 = results['chi2_red']
-            else:
-                chi2 = -2 * results['log_likelihood']
-                n_data = len(obs_flux)
-                n_params = len(results['parameters'])
-                reduced_chi2 = chi2 / max(n_data - n_params, 1)
-            
             textstr = f"z = {redshift:.4f}\n"
             textstr += f"$\\chi^2_{{\\nu}}$ = {reduced_chi2:.2f}\n"
             for param, value in results['parameters'].items():
@@ -264,40 +400,73 @@ class Plotting:
                     textstr += f"[Z/H] = {value:.2f}\n"
                 elif param == 'dust':
                     textstr += f"E(B-V) = {value:.2f}\n"
-            
-            props = dict(boxstyle='round,pad=0.3', facecolor='white', 
+
+            props = dict(boxstyle='round,pad=0.4', facecolor='white',
                         edgecolor='gray', alpha=0.95)
-            ax_sed.text(0.03, 0.97, textstr.strip(), transform=ax_sed.transAxes,
-                       fontsize=10, verticalalignment='top', horizontalalignment='left',
-                       bbox=props)
+            if is_cigale:
+                ax_sed.text(0.97, 0.97, textstr.strip(), transform=ax_sed.transAxes,
+                           fontsize=11, verticalalignment='top', horizontalalignment='right',
+                           bbox=props)
+            else:
+                ax_sed.text(0.03, 0.97, textstr.strip(), transform=ax_sed.transAxes,
+                           fontsize=10, verticalalignment='top', horizontalalignment='left',
+                           bbox=props)
         
         # Residuals panel
         if self.show_residuals:
-            residuals = (obs_flux - mod_flux) / obs_err
-            
+            # Use the SAME effective errors as the likelihood/χ² calculation
+            # (raw obs_err alone can be tiny for high-SNR data, producing
+            # misleading 100-σ residuals that don't match the reported χ²).
+            error_floor_frac = 0.05
+            eff_err = np.sqrt(
+                obs_err ** 2
+                + np.maximum(
+                    error_floor_frac * np.median(obs_flux),
+                    error_floor_frac * obs_flux,
+                ) ** 2
+            )
+
+            if is_cigale:
+                # Relative residual: (Obs - Mod) / Obs (CIGALE convention)
+                residuals = (obs_flux - mod_flux) / np.where(obs_flux > 0, obs_flux, 1.0)
+            else:
+                residuals = (obs_flux - mod_flux) / eff_err
+
+            res_marker_color = obs_color if is_cigale else self.colors['observed']
+            res_edge_color   = obs_color if is_cigale else '#1A5276'
             if is_narrow and n_points > 5:
                 # Connected line for dense narrow-range data
                 sort_idx = np.argsort(wavelength_um)
-                ax_res.plot(wavelength_um[sort_idx], residuals[sort_idx], '-o', 
-                           markersize=4, color=self.colors['observed'], linewidth=0.8, zorder=3)
+                ax_res.plot(wavelength_um[sort_idx], residuals[sort_idx], '-o',
+                           markersize=4, color=res_marker_color, linewidth=0.8, zorder=3)
+            elif is_cigale:
+                ax_res.scatter(wavelength_um, residuals, s=120, marker='+',
+                              color='black', linewidth=2.0, zorder=3)
             else:
                 ax_res.scatter(wavelength_um, residuals, s=80, marker='o',
-                              facecolor=self.colors['observed'], 
-                              edgecolors='#1A5276', linewidth=1.5, zorder=3)
+                              facecolor=res_marker_color,
+                              edgecolors=res_edge_color,
+                              linewidth=1.5, zorder=3)
             
-            ax_res.axhline(y=0, color='black', linestyle='-', linewidth=1.0, zorder=2)
-            ax_res.axhspan(-1, 1, alpha=0.3, color=self.colors['residual_good'], zorder=1)
-            ax_res.axhspan(-2, -1, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
-            ax_res.axhspan(1, 2, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
-            ax_res.axhline(y=1, color=self.colors['residual_good'], 
-                          linestyle='--', linewidth=0.8, alpha=0.8)
-            ax_res.axhline(y=-1, color=self.colors['residual_good'],
-                          linestyle='--', linewidth=0.8, alpha=0.8)
-            
-            ax_res.set_xlabel(r'$\lambda_{\rm obs}$ [$\mu$m]', fontsize=14)
-            ax_res.set_ylabel(r'$\chi$', fontsize=14)
-            res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
-            ax_res.set_ylim(-res_max, res_max)
+            ax_res.axhline(y=0, color='black', linestyle='--', linewidth=1.0, zorder=2)
+            if not is_cigale:
+                ax_res.axhspan(-1, 1, alpha=0.3, color=self.colors['residual_good'], zorder=1)
+                ax_res.axhspan(-2, -1, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
+                ax_res.axhspan(1, 2, alpha=0.15, color=self.colors['residual_warn'], zorder=1)
+                ax_res.axhline(y=1, color=self.colors['residual_good'],
+                              linestyle='--', linewidth=0.8, alpha=0.8)
+                ax_res.axhline(y=-1, color=self.colors['residual_good'],
+                              linestyle='--', linewidth=0.8, alpha=0.8)
+
+            if is_cigale:
+                ax_res.set_xlabel(r'Observed $\lambda$ ($\mu$m)', fontsize=14)
+                ax_res.set_ylabel('Relative\nresidual', fontsize=12)
+                ax_res.set_ylim(-1, 1)
+            else:
+                ax_res.set_xlabel(r'$\lambda_{\rm obs}$ [$\mu$m]', fontsize=14)
+                ax_res.set_ylabel(r'$\chi$', fontsize=14)
+                res_max = max(3, max(abs(residuals.min()), abs(residuals.max())) * 1.2)
+                ax_res.set_ylim(-res_max, res_max)
             ax_res.set_xlim(x_min, x_max)
             
             if is_narrow:

@@ -1,5 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# SPECTRA config — Rubin DP0.2 (DC2 simulation) test objects
+# SPECTRA config  Rubin DP0.2 (DC2 simulation) test objects
 #
 # DP0.2 is Rubin's Data Preview using the DESC DC2 simulation.
 # These are SIMULATED galaxies with known true parameters.
@@ -12,9 +11,9 @@
 #
 # Run with:
 #   spectra --config example_configs/config_dp02_test.yaml
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
-# --- Option A: Query by coordinates in the DC2 field ---
+# By Query of the DP2 field
 # The DC2 simulation covers RA ~ 50-75°, Dec ~ -45 to -25°
 input:
   type: rubin_cone_search
@@ -32,7 +31,7 @@ rubin:
 
 ssp_model:
   type: fsps
-  redshift: 0.0        # Will be overridden per-object if available
+  redshift: 0.0        # Will be overridden per. object if available
   imf: chabrier
   sfh: 0
   dust_type: 2
@@ -51,14 +50,14 @@ fitting:
 mcmc:
   n_walkers: 32
   n_steps: 1000
-  burn_in: 200
+  n_burnin: 200
   thin: 5
 
 plotting:
   output_dir: "outputs/dp02_test"
   show_plots: false
   save_plots: true
-  plot_format: png
+  formats: [png]
   dpi: 150
 
 output:

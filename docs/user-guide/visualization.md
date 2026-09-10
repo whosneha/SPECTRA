@@ -68,11 +68,6 @@ plotting:
 
 ## Example Configs
 
-Three ready-to-use examples are in `example_configs/`:
+Plotting options can be added to any local config. The published examples in `example_configs/` keep plotting minimal so test runs stay fast.
 
-| Config | Description |
-|--------|-------------|
-| `config_custom_plotting.yaml` | All options set explicitly with comments |
-| `config_minimal_plotting.yaml` | Fast, low-res PNGs, no residuals/annotation |
-| `config_presentation_plotting.yaml` | 300 DPI PDF+PNG, publication style, deep colors |
 

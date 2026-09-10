@@ -39,6 +39,8 @@ class DataLoader:
         
         if input_type == 'rubin_id':
             phot_data = self._load_rubin_id(**kwargs)
+        elif input_type == 'rubin_tap':
+            phot_data = self._load_rubin_tap(**kwargs)
         elif input_type == 'fits':
             phot_data = self._load_fits(**kwargs)
         elif input_type == 'file' or input_type == 'csv':
@@ -299,9 +301,17 @@ class DataLoader:
         # Try to read with automatic column detection
         data = pd.read_csv(filepath, sep=r'\s+', comment='#',
                           names=['wavelength', 'obs_flux', 'obs_err', 'mod_flux'])
-        
+
+        wav = data['wavelength'].values
+        # Auto-detect units: if wavelengths are < 100 the file is in microns,
+        # otherwise assume Angstroms (the pipeline-internal unit).
+        if np.nanmax(wav) < 100:
+            print(f"  Wavelength range ({wav.min():.3f}–{wav.max():.3f}) "
+                  f"looks like microns; converting to Å.")
+            wav = wav * 1e4
+
         return {
-            'wavelength': data['wavelength'].values,
+            'wavelength': wav,
             'obs_flux': data['obs_flux'].values,
             'obs_err': data['obs_err'].values,
             'mod_flux': data['mod_flux'].values,

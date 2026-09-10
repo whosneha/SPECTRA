@@ -256,14 +256,41 @@ class RubinDataQuery:
             raise RuntimeError("No valid photometry found in query results")
         
         print(f"\n[RUBIN QUERY] Successfully extracted {len(wavelengths)} bands: {used_bands}")
+
+        ra = self._first_present_value(df, ['coord_ra', 'ra', 'RA'])
+        dec = self._first_present_value(df, ['coord_dec', 'dec', 'DEC'])
+        redshift = self._first_present_value(df, ['redshift', 'photoz', 'z', 'redshift_best'])
+        object_id = self._first_present_value(df, ['objectId', 'object_id'])
         
-        return {
+        phot_data = {
             'wavelength': np.array(wavelengths),
             'obs_flux': np.array(fluxes),
             'obs_err': np.array(flux_errs),
             'mod_flux': np.zeros(len(fluxes)),
             'bands': used_bands
         }
+
+        if ra is not None:
+            phot_data['ra'] = float(ra)
+        if dec is not None:
+            phot_data['dec'] = float(dec)
+        if redshift is not None:
+            phot_data['redshift'] = float(redshift)
+        if object_id is not None:
+            phot_data['rubin_object_id'] = int(object_id)
+
+        return phot_data
+
+    @staticmethod
+    def _first_present_value(df: pd.DataFrame, columns: List[str]):
+        """Return the first finite value found in any candidate column."""
+        for column in columns:
+            if column not in df.columns:
+                continue
+            value = df[column].values[0]
+            if pd.notna(value):
+                return value
+        return None
     
     @staticmethod
     def flux_to_mag(flux_jy: float, flux_err_jy: float = None):

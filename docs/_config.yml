@@ -4,5 +4,5 @@ logo: ""
 execute:
   execute_notebooks: "off"
 repository:
-  url: https://github.com/yourusername/SPECTRA
+  url: https://github.com/whosneha/SPECTRA
   branch: main

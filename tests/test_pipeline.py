@@ -166,7 +166,12 @@ class TestDataLoaders:
         from src.data.phangs_loader import load_phangs_fits
         
         # This requires a real PHANGS file - skip if not available
-        test_file = Path("/Users/snehanair/Downloads/catalogs 2/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits")
+        test_file = Path(
+            os.environ.get(
+                "SPECTRA_PHANGS_TEST_FILE",
+                "data/phangs/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits",
+            )
+        )
         
         if not test_file.exists():
             pytest.skip("PHANGS test file not available")

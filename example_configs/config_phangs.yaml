@@ -1,1 +1,40 @@
-# ...existing content from config_phangs.yaml...
+# -----------------------------------------------------------------------------
+# SPECTRA config — PHANGS-HST star-cluster example
+# Replace `input.filepath` with your local PHANGS FITS catalog path.
+# -----------------------------------------------------------------------------
+
+input:
+  type: phangs_fits
+  filepath: "data/phangs/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits"
+  max_rows: 10
+  min_valid_bands: 3
+  error_floor_frac: 0.05
+
+ssp_model:
+  type: fsps
+  redshift: 0.00184
+  distance_mpc: 9.01
+  imf: chabrier
+  sfh: 0
+  dust_type: 2
+  add_neb_emission: false
+
+fitting:
+  method: ml
+  error_floor: 0.05
+  parameters: [mass, age, metallicity, dust]
+  priors:
+    mass: [2.0, 7.0]
+    age: [0.001, 1.0]
+    metallicity: [-1.5, 0.3]
+    dust: [0.0, 1.5]
+
+plotting:
+  output_dir: "outputs/phangs_ic5332_example"
+  show_plots: false
+  save_plots: true
+  formats: [png]
+  dpi: 150
+
+output:
+  save_photometry: true

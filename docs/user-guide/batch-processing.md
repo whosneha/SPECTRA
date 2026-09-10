@@ -13,7 +13,7 @@ input:
 Run:
 
 ```bash
-./bin/spectra --config config.yaml
+./bin/spectra --config path/to/local_fits_batch.yaml
 ```
 
 ## Rubin batch mode

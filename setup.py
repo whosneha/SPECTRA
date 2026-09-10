@@ -6,7 +6,7 @@ setup(
     description="SPECTRA: Stellar Population Estimation via Comprehensive Template Response Analysis",
     author="Your Name",
     author_email="your.email@example.com",
-    url="https://github.com/yourusername/SPECTRA",
+    url="https://github.com/whosneha/SPECTRA",
     py_modules=["spectra_cli"],
     install_requires=[
         "numpy>=1.20",

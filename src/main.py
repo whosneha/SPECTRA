@@ -465,7 +465,16 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
     bounds = []
     for p in config['fitting']['parameters']:
         pmin, pmax = priors_numeric[p]
-        initial_params[p] = (pmin + pmax) / 2.0
+        # Default to midpoint; for dust start at zero to avoid triggering large
+        # energy-balance IR emission (Dale 2014) at the initial evaluation.
+        if p == 'dust':
+            initial_params[p] = pmin
+        elif p == 'age' and pmin > 0 and pmax > pmin:
+            # Log-space midpoint for age avoids landing on bad SSP grid steps
+            # (e.g. BC03 artifacts at 77 Myr for arithmetic midpoint of 0.003–0.15)
+            initial_params[p] = 10 ** ((np.log10(pmin) + np.log10(pmax)) / 2.0)
+        else:
+            initial_params[p] = (pmin + pmax) / 2.0
         bounds.append((pmin, pmax))
 
     # If FSPS is active, estimate mass from observed flux to get a better start
@@ -506,6 +515,12 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
         print("Running Maximum Likelihood fitting...")
         fitter = SEDFitter(likelihood, ssp_model, wavelengths=phot_data['wavelength'])
         results = fitter.fit_maximum_likelihood(initial_params, bounds=bounds)
+
+    elif fitting_method == 'pdf_analysis':
+        print("Running CIGALE-style PDF analysis (grid)...")
+        fitter = SEDFitter(likelihood, ssp_model, wavelengths=phot_data['wavelength'])
+        grid_config = config['fitting'].get('pdf_grid', {})
+        results = fitter.fit_pdf_analysis(priors_numeric, grid_config=grid_config)
         
     elif fitting_method == 'mcmc':
         print("Running MCMC fitting...")
@@ -527,8 +542,11 @@ def process_single_object(object_id, phot_data, config, ssp_model_base_config):
         # Add trace plot for burn-in diagnostics - FIX: get full chain from sampler
         if 'sampler' in results:
             chain = results['sampler'].get_chain()  # Shape: (nwalkers, nsteps, ndim)
-            plotting.plot_trace(chain, config['fitting']['parameters'],
-                               burn_in=mcmc_config.get('burn_in', 500))
+            plotting.plot_trace(
+                chain,
+                config['fitting']['parameters'],
+                burn_in=mcmc_config.get('n_burnin', mcmc_config.get('burn_in', 300)),
+            )
 
     else:
         raise ValueError(f"Unknown fitting method: {fitting_method}")

@@ -3,44 +3,48 @@
 ## Requirements
 
 - Python 3.9+
-- pip
+- `pip`
+- a Rubin Science Platform token only if you plan to use Rubin TAP queries
 
-## Install from repository
+## Recommended setup
 
 ```bash
 git clone https://github.com/whosneha/SPECTRA.git
 cd SPECTRA
+
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+
+export PATH="$PWD/bin:$PATH"
+spectra --help
 ```
 
-## Verify installation
-
-After installing, verify that all dependencies and modules are working correctly:
+## Verify the install
 
 ```bash
 python tests/run_installation_tests.py
+pytest
 ```
 
-This runs a comprehensive smoke test suite that checks:
-- All required packages are installed
-- Core SPECTRA modules import correctly
-- Configuration files are valid
-- Data loaders work as expected
+If `pytest` is too slow for a fresh environment, the installation test script is the faster smoke test.
 
-All tests should pass (34/34).
+## Rubin setup
 
-## Run without package install
+For Rubin workflows, export your token before running a config that uses `rubin_id`, `rubin_tap`, `rubin_cone_search`, or `rubin_from_csv`:
 
 ```bash
-./bin/spectra --help
-```
-
-If needed, use:
-
-```bash
-python run.py --help
+export RSP_TOKEN="your_rsp_token"
+spectra --validate --config example_configs/config_dp02_test.yaml
 ```
 
 ## Optional FSPS setup
 
-SPECTRA can run without FSPS (fallback/mock mode). If you want FSPS-backed models, install FSPS and set SPS_HOME.
+SPECTRA can run in a fallback/mock mode without FSPS. If you want FSPS-backed models:
+
+```bash
+export SPS_HOME=/path/to/fsps
+pip install fsps
+```
+
+If you plan to use BC03 grids instead, see `spectra setup bc03 --help`.

@@ -2,4 +2,23 @@
 # SPECTRA CLI wrapper
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
-exec python "$REPO_ROOT/spectra_cli.py" "$@"
+
+# Default SPS_HOME to the bundled FSPS data tree if the user hasn't set one.
+# This is required for python-fsps to find isochrones, spectra, and filters.
+if [ -z "$SPS_HOME" ] && [ -d "$REPO_ROOT/fsps" ]; then
+    export SPS_HOME="$REPO_ROOT/fsps"
+fi
+
+if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+    PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python)"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+else
+    echo "SPECTRA could not find a usable Python interpreter." >&2
+    echo "Create a repo-local .venv or install python3." >&2
+    exit 127
+fi
+
+exec "$PYTHON_BIN" "$REPO_ROOT/spectra_cli.py" "$@"

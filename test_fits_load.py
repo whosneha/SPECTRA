@@ -5,7 +5,12 @@ from astropy.table import Table
 import numpy as np
 
 # Path to the FITS file
-fits_path = "/Users/snehanair/Downloads/catalogs 2/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits"
+import os
+
+fits_path = os.environ.get(
+    "SPECTRA_PHANGS_TEST_FILE",
+    "data/phangs/hlsp_phangs-cat_hst_uvis_ic5332_multi_v1_obs-human-cluster-class12.fits",
+)
 
 # HST filter wavelengths in microns
 HST_WAVELENGTHS = {
